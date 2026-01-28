@@ -684,7 +684,7 @@ function RapportenSection({ reports, setReports, setNewReports }) {
 
 function AfsprakenSection() {
   // Configure your Calendly URL here
-  const calendlyUrl = 'https://calendly.com/walterzantinge/30min`';
+  const calendlyUrl = 'src="https://calendly.com/walterzantinge/30min";
 
   return (
     <div style={styles.section}>
