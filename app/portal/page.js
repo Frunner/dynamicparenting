@@ -684,7 +684,7 @@ function RapportenSection({ reports, setReports, setNewReports }) {
 
 function AfsprakenSection() {
   // Configure your Calendly URL here
-  const calendlyUrl = src="https://calendly.com/walterzantinge/30min?embed_domain=dynamicparenting.vercel.app&embed_type=Inline";
+  const calendlyUrl = "https://calendly.com/walterzantinge/30min?embed_domain=dynamicparenting.vercel.app&embed_type=Inline";
 
   return (
     <div style={styles.section}>
