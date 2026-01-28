@@ -573,13 +573,13 @@ function VragenlijstenSection() {
       id: 'weekly',
       title: 'Wekelijkse Check-in',
       desc: 'Korte vragenlijst over je week (5 min)',
-      typeformId: 'JOUW_TYPEFORM_ID', // Vervang met echte Typeform ID
+      typeformId: 'bM30pflI', // Vervang met echte Typeform ID
     },
     {
       id: 'intake',
       title: 'Intake Vragenlijst',
       desc: 'Uitgebreide vragenlijst voor nieuwe cliënten (15 min)',
-      typeformId: 'JOUW_TYPEFORM_ID_2', // Vervang met echte Typeform ID
+      typeformId: 'bM30pflI_2', // Vervang met echte Typeform ID
     },
   ];
 
@@ -684,7 +684,7 @@ function RapportenSection({ reports, setReports, setNewReports }) {
 
 function AfsprakenSection() {
   // Configure your Calendly URL here
-  const calendlyUrl = 'https://calendly.com/JOUW_CALENDLY_USERNAME';
+  const calendlyUrl = 'https://calendly.com/walterzantinge/30min`';
 
   return (
     <div style={styles.section}>
