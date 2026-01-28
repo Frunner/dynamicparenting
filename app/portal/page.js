@@ -3,25 +3,24 @@
 import { useState, useEffect, useRef } from 'react';
 import { supabase } from '../../lib/supabase';
 
-export default function PortalDashboard() {
+export default function PatientDashboard() {
   const [user, setUser] = useState(null);
   const [profile, setProfile] = useState(null);
+  const [therapist, setTherapist] = useState(null);
   const [activeSection, setActiveSection] = useState('overzicht');
   const [loading, setLoading] = useState(true);
   
   // Data states
   const [progressData, setProgressData] = useState([]);
   const [insights, setInsights] = useState([]);
-  const [notes, setNotes] = useState([]);
+  const [sessionNotes, setSessionNotes] = useState([]);
+  const [questionnaires, setQuestionnaires] = useState([]);
   const [reports, setReports] = useState([]);
   const [messages, setMessages] = useState([]);
+  const [newMessage, setNewMessage] = useState('');
   
-  // Badge counts
-  const [unreadInsights, setUnreadInsights] = useState(0);
-  const [newReports, setNewReports] = useState(0);
-  const [unreadMessages, setUnreadMessages] = useState(0);
+  const messagesEndRef = useRef(null);
 
-  // Load user and data
   useEffect(() => {
     loadUser();
   }, []);
@@ -34,103 +33,151 @@ export default function PortalDashboard() {
   }, [user]);
 
   async function loadUser() {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (user) {
-      setUser(user);
-      const { data } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', user.id)
-        .single();
-      setProfile(data);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        setUser(user);
+        const { data: profileData } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', user.id)
+          .single();
+        
+        if (profileData) {
+          setProfile(profileData);
+          // Redirect therapists to their portal
+          if (profileData.role === 'therapist') {
+            window.location.href = '/therapeut';
+            return;
+          }
+          // Load therapist info
+          if (profileData.therapist_id) {
+            const { data: therapistData } = await supabase
+              .from('profiles')
+              .select('*')
+              .eq('id', profileData.therapist_id)
+              .single();
+            if (therapistData) setTherapist(therapistData);
+          }
+        }
+      } else {
+        window.location.href = '/login';
+      }
+    } catch (error) {
+      console.error('Error loading user:', error);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }
 
   async function loadAllData() {
-    // Progress Data
+    // Load progress data
     const { data: progress } = await supabase
       .from('progress_data')
       .select('*')
       .eq('patient_id', user.id)
-      .order('date', { ascending: true })
-      .limit(12);
-    setProgressData(progress || []);
+      .order('date', { ascending: false })
+      .limit(30);
+    if (progress) setProgressData(progress);
 
-    // AI Insights
-    const { data: insightData } = await supabase
+    // Load AI insights
+    const { data: insightsData } = await supabase
       .from('ai_insights')
       .select('*')
       .eq('patient_id', user.id)
-      .order('generated_at', { ascending: false });
-    setInsights(insightData || []);
-    setUnreadInsights(insightData?.filter(i => !i.is_read).length || 0);
+      .order('created_at', { ascending: false });
+    if (insightsData) setInsights(insightsData);
 
-    // Session Notes
-    const { data: noteData } = await supabase
+    // Load session notes
+    const { data: notes } = await supabase
       .from('session_notes')
       .select('*')
       .eq('patient_id', user.id)
-      .eq('is_visible', true)
       .order('session_date', { ascending: false });
-    setNotes(noteData || []);
+    if (notes) setSessionNotes(notes);
 
-    // Reports
-    const { data: reportData } = await supabase
+    // Load questionnaires
+    const { data: questionnaireData } = await supabase
+      .from('questionnaires')
+      .select('*')
+      .eq('is_active', true);
+    if (questionnaireData) setQuestionnaires(questionnaireData);
+
+    // Load reports
+    const { data: reportsData } = await supabase
       .from('reports')
       .select('*')
       .eq('patient_id', user.id)
       .order('created_at', { ascending: false });
-    setReports(reportData || []);
-    setNewReports(reportData?.filter(r => r.is_new).length || 0);
+    if (reportsData) setReports(reportsData);
 
-    // Messages
-    const { data: msgData } = await supabase
-      .from('messages')
-      .select('*')
-      .or(`sender_id.eq.${user.id},receiver_id.eq.${user.id}`)
-      .order('created_at', { ascending: true });
-    setMessages(msgData || []);
-    setUnreadMessages(msgData?.filter(m => !m.is_read && m.receiver_id === user.id).length || 0);
+    // Load messages
+    if (profile?.therapist_id) {
+      const { data: messagesData } = await supabase
+        .from('messages')
+        .select('*')
+        .or(`sender_id.eq.${user.id},receiver_id.eq.${user.id}`)
+        .order('created_at', { ascending: true });
+      if (messagesData) setMessages(messagesData);
+    }
   }
 
   function subscribeToMessages() {
     const channel = supabase
-      .channel('messages-channel')
-      .on('postgres_changes', 
-        { event: 'INSERT', schema: 'public', table: 'messages' },
-        (payload) => {
-          if (payload.new.receiver_id === user.id || payload.new.sender_id === user.id) {
-            setMessages(prev => [...prev, payload.new]);
-            if (payload.new.receiver_id === user.id) {
-              setUnreadMessages(prev => prev + 1);
-            }
-          }
+      .channel('patient-messages')
+      .on('postgres_changes', {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'messages'
+      }, (payload) => {
+        if (payload.new.sender_id === user.id || payload.new.receiver_id === user.id) {
+          setMessages(prev => [...prev, payload.new]);
         }
-      )
+      })
       .subscribe();
 
     return () => supabase.removeChannel(channel);
   }
 
-  const menuItems = [
-    { id: 'overzicht', label: 'Overzicht', icon: '🏠' },
-    { id: 'voortgang', label: 'Mijn Voortgang', icon: '📈' },
-    { id: 'inzichten', label: 'AI Inzichten', icon: '🤖', badge: unreadInsights },
-    { id: 'notities', label: 'Sessie Notities', icon: '📝' },
-    { id: 'vragenlijsten', label: 'Vragenlijsten', icon: '📋' },
-    { id: 'rapporten', label: 'Rapporten', icon: '📄', badge: newReports },
-    { id: 'afspraken', label: 'Afspraken', icon: '📅' },
-    { id: 'berichten', label: 'Berichten', icon: '💬', badge: unreadMessages },
-  ];
+  async function sendMessage() {
+    if (!newMessage.trim() || !profile?.therapist_id) return;
+
+    const { error } = await supabase
+      .from('messages')
+      .insert({
+        sender_id: user.id,
+        receiver_id: profile.therapist_id,
+        content: newMessage.trim()
+      });
+
+    if (!error) {
+      setNewMessage('');
+    }
+  }
+
+  async function handleLogout() {
+    await supabase.auth.signOut();
+    window.location.href = '/login';
+  }
 
   if (loading) {
     return <LoadingScreen />;
   }
 
-  if (!user) {
-    return <LoginPrompt />;
+  if (!user || !profile) {
+    return <div style={styles.container}><p>Laden...</p></div>;
   }
+
+  const menuItems = [
+    { id: 'overzicht', label: 'Overzicht', icon: '🏠' },
+    { id: 'voortgang', label: 'Mijn Voortgang', icon: '📊' },
+    { id: 'inzichten', label: 'AI Inzichten', icon: '💡' },
+    { id: 'notities', label: 'Sessie Notities', icon: '📝' },
+    { id: 'vragenlijsten', label: 'Vragenlijsten', icon: '📋' },
+    { id: 'rapporten', label: 'Rapporten', icon: '📄' },
+    { id: 'afspraken', label: 'Afspraken', icon: '📅' },
+    { id: 'berichten', label: 'Berichten', icon: '💬' },
+  ];
 
   return (
     <div style={styles.container}>
@@ -152,70 +199,56 @@ export default function PortalDashboard() {
               }}
             >
               <span style={styles.navIcon}>{item.icon}</span>
-              <span style={styles.navLabel}>{item.label}</span>
-              {item.badge > 0 && <span style={styles.badge}>{item.badge}</span>}
+              {item.label}
             </button>
           ))}
         </nav>
 
         <div style={styles.userSection}>
-          <div style={styles.userAvatar}>
-            {profile?.full_name?.charAt(0) || '?'}
-          </div>
+          <div style={styles.userAvatar}>👤</div>
           <div style={styles.userInfo}>
-            <span style={styles.userName}>{profile?.full_name || 'Gebruiker'}</span>
-            <button 
-              onClick={() => supabase.auth.signOut()}
-              style={styles.logoutBtn}
-            >
-              Uitloggen
-            </button>
+            <span style={styles.userName}>{profile?.full_name || 'Patiënt'}</span>
+            <button onClick={handleLogout} style={styles.logoutBtn}>Uitloggen</button>
           </div>
         </div>
       </aside>
 
       {/* Main Content */}
       <main style={styles.main}>
+        {/* Therapist Info Banner */}
+        {therapist && (
+          <div style={styles.therapistBanner}>
+            <span style={styles.therapistIcon}>👩‍⚕️</span>
+            <div>
+              <span style={styles.therapistLabel}>Jouw therapeut:</span>
+              <span style={styles.therapistName}>{therapist.full_name}</span>
+            </div>
+          </div>
+        )}
+
         {activeSection === 'overzicht' && (
           <OverzichtSection 
-            profile={profile}
+            profile={profile} 
+            therapist={therapist}
             progressData={progressData}
             insights={insights}
-            setActiveSection={setActiveSection}
           />
         )}
-        {activeSection === 'voortgang' && (
-          <VoortgangSection progressData={progressData} />
-        )}
-        {activeSection === 'inzichten' && (
-          <InzichtenSection 
-            insights={insights}
-            setInsights={setInsights}
-            setUnreadInsights={setUnreadInsights}
-          />
-        )}
-        {activeSection === 'notities' && (
-          <NotitiesSection notes={notes} />
-        )}
-        {activeSection === 'vragenlijsten' && (
-          <VragenlijstenSection />
-        )}
-        {activeSection === 'rapporten' && (
-          <RapportenSection 
-            reports={reports}
-            setReports={setReports}
-            setNewReports={setNewReports}
-          />
-        )}
-        {activeSection === 'afspraken' && (
-          <AfsprakenSection />
-        )}
+        {activeSection === 'voortgang' && <VoortgangSection progressData={progressData} />}
+        {activeSection === 'inzichten' && <InzichtenSection insights={insights} />}
+        {activeSection === 'notities' && <NotitiesSection sessionNotes={sessionNotes} />}
+        {activeSection === 'vragenlijsten' && <VragenlijstenSection questionnaires={questionnaires} />}
+        {activeSection === 'rapporten' && <RapportenSection reports={reports} />}
+        {activeSection === 'afspraken' && <AfsprakenSection />}
         {activeSection === 'berichten' && (
           <BerichtenSection 
             messages={messages}
-            setMessages={setMessages}
+            newMessage={newMessage}
+            setNewMessage={setNewMessage}
+            sendMessage={sendMessage}
             userId={user.id}
-            setUnreadMessages={setUnreadMessages}
+            therapist={therapist}
+            messagesEndRef={messagesEndRef}
           />
         )}
       </main>
@@ -223,10 +256,7 @@ export default function PortalDashboard() {
   );
 }
 
-// ============================================
-// LOADING & LOGIN COMPONENTS
-// ============================================
-
+// Loading Screen
 function LoadingScreen() {
   return (
     <div style={styles.loadingContainer}>
@@ -236,585 +266,310 @@ function LoadingScreen() {
   );
 }
 
-function LoginPrompt() {
-  return (
-    <div style={styles.loginContainer}>
-      <div style={styles.loginBox}>
-        <span style={{ fontSize: '48px' }}>🌿</span>
-        <h1>Dynamic Parenting Portal</h1>
-        <p>Log in om toegang te krijgen tot je persoonlijke dashboard.</p>
-        <a href="/login" style={styles.loginButton}>Inloggen</a>
-      </div>
-    </div>
-  );
-}
-
-// ============================================
-// OVERZICHT SECTION
-// ============================================
-
-function OverzichtSection({ profile, progressData, insights, setActiveSection }) {
-  const latest = progressData[progressData.length - 1];
-  const previous = progressData[progressData.length - 2];
-
+// Overzicht Section
+function OverzichtSection({ profile, therapist, progressData, insights }) {
+  const latestProgress = progressData[0];
+  
   return (
     <div style={styles.section}>
-      <h1 style={styles.pageTitle}>
-        Welkom terug{profile?.full_name ? `, ${profile.full_name.split(' ')[0]}` : ''}! 👋
-      </h1>
-
-      {/* Stats Grid */}
+      <h1 style={styles.pageTitle}>Welkom terug, {profile?.full_name?.split(' ')[0] || 'daar'}! 👋</h1>
+      
+      {/* Stats */}
       <div style={styles.statsGrid}>
-        <StatCard 
-          icon="😌" 
-          label="Stress" 
-          value={latest?.stress_level}
-          prev={previous?.stress_level}
-          inverse
-        />
-        <StatCard 
-          icon="⚡" 
-          label="Energie" 
-          value={latest?.energy_level}
-          prev={previous?.energy_level}
-        />
-        <StatCard 
-          icon="🌟" 
-          label="Stemming" 
-          value={latest?.mood_level}
-          prev={previous?.mood_level}
-        />
+        <div style={styles.statCard}>
+          <span style={styles.statEmoji}>😌</span>
+          <span style={styles.statNumber}>{latestProgress?.stress_level || '-'}/10</span>
+          <span style={styles.statLabel}>Stress</span>
+        </div>
+        <div style={styles.statCard}>
+          <span style={styles.statEmoji}>⚡</span>
+          <span style={styles.statNumber}>{latestProgress?.energy_level || '-'}/10</span>
+          <span style={styles.statLabel}>Energie</span>
+        </div>
+        <div style={styles.statCard}>
+          <span style={styles.statEmoji}>🌟</span>
+          <span style={styles.statNumber}>{latestProgress?.mood_score || '-'}/10</span>
+          <span style={styles.statLabel}>Stemming</span>
+        </div>
       </div>
 
       {/* Quick Actions */}
       <div style={styles.card}>
         <h3 style={styles.cardTitle}>Snelle acties</h3>
-        <div style={styles.actionBtns}>
-          <button style={styles.actionBtn} onClick={() => setActiveSection('vragenlijsten')}>
-            📋 Vragenlijst invullen
-          </button>
-          <button style={styles.actionBtn} onClick={() => setActiveSection('afspraken')}>
-            📅 Afspraak plannen
-          </button>
-          <button style={styles.actionBtn} onClick={() => setActiveSection('berichten')}>
-            💬 Bericht sturen
-          </button>
+        <div style={styles.quickActions}>
+          <button style={styles.actionBtn}>📋 Vragenlijst invullen</button>
+          <button style={styles.actionBtn}>📅 Afspraak plannen</button>
+          <button style={styles.actionBtn}>💬 Bericht sturen</button>
         </div>
       </div>
 
-      {/* Mini Chart */}
-      {progressData.length > 2 && (
-        <div style={styles.card}>
-          <h3 style={styles.cardTitle}>Je voortgang</h3>
-          <ProgressChart data={progressData.slice(-6)} />
-        </div>
-      )}
-
       {/* Latest Insight */}
-      {insights[0] && (
+      {insights.length > 0 && (
         <div style={styles.card}>
-          <h3 style={styles.cardTitle}>Laatste inzicht</h3>
-          <div style={styles.insightPreview}>
-            <span style={{ fontSize: '32px' }}>{insights[0].icon}</span>
-            <div>
-              <strong>{insights[0].title}</strong>
-              <p style={{ color: '#6b7280', margin: '4px 0 0' }}>{insights[0].content}</p>
-            </div>
-          </div>
+          <h3 style={styles.cardTitle}>💡 Laatste inzicht</h3>
+          <p style={styles.insightText}>{insights[0].content}</p>
         </div>
       )}
     </div>
   );
 }
 
-function StatCard({ icon, label, value, prev, inverse = false }) {
-  const change = value && prev ? value - prev : null;
-  const isGood = inverse ? change < 0 : change > 0;
-
-  return (
-    <div style={styles.statCard}>
-      <span style={{ fontSize: '28px' }}>{icon}</span>
-      <span style={styles.statValue}>{value || '-'}/10</span>
-      <span style={styles.statLabel}>{label}</span>
-      {change !== null && change !== 0 && (
-        <span style={{ 
-          fontSize: '12px', 
-          fontWeight: '600',
-          color: isGood ? '#22c55e' : '#ef4444' 
-        }}>
-          {change > 0 ? '↑' : '↓'} {Math.abs(change)}
-        </span>
-      )}
-    </div>
-  );
-}
-
-// ============================================
-// VOORTGANG SECTION
-// ============================================
-
+// Voortgang Section
 function VoortgangSection({ progressData }) {
   return (
     <div style={styles.section}>
-      <h1 style={styles.pageTitle}>📈 Mijn Voortgang</h1>
-      <p style={styles.pageDesc}>Bekijk je stress, energie en stemming over tijd.</p>
-
-      {progressData.length > 0 ? (
-        <>
-          <div style={styles.card}>
-            <ProgressChart data={progressData} />
-          </div>
-
-          <div style={styles.card}>
-            <h3 style={styles.cardTitle}>Geschiedenis</h3>
-            {progressData.slice().reverse().map((item, idx) => (
-              <div key={idx} style={styles.historyItem}>
-                <span style={styles.historyDate}>
-                  {new Date(item.date).toLocaleDateString('nl-NL', {
-                    weekday: 'short', day: 'numeric', month: 'short'
-                  })}
-                </span>
-                <div style={styles.historyValues}>
-                  <span>😌 {item.stress_level}</span>
-                  <span>⚡ {item.energy_level}</span>
-                  <span>🌟 {item.mood_level}</span>
-                </div>
-              </div>
-            ))}
-          </div>
-        </>
+      <h1 style={styles.pageTitle}>📊 Mijn Voortgang</h1>
+      <p style={styles.pageDesc}>Bekijk je voortgang over tijd.</p>
+      
+      {progressData.length === 0 ? (
+        <div style={styles.emptyState}>
+          <p>Nog geen voortgangsdata beschikbaar.</p>
+        </div>
       ) : (
-        <EmptyState icon="📊" text="Nog geen voortgangsdata. Vul eerst een vragenlijst in." />
+        <div style={styles.progressList}>
+          {progressData.map((entry, i) => (
+            <div key={i} style={styles.progressCard}>
+              <span style={styles.progressDate}>
+                {new Date(entry.date).toLocaleDateString('nl-NL')}
+              </span>
+              <div style={styles.progressScores}>
+                <span>😌 Stress: {entry.stress_level}/10</span>
+                <span>⚡ Energie: {entry.energy_level}/10</span>
+                <span>🌟 Stemming: {entry.mood_score}/10</span>
+              </div>
+            </div>
+          ))}
+        </div>
       )}
     </div>
   );
 }
 
-function ProgressChart({ data }) {
-  const height = 120;
-  const width = data.length * 70;
-
-  return (
-    <div style={{ overflowX: 'auto' }}>
-      <svg width={width} height={height + 30} style={{ minWidth: '100%' }}>
-        {/* Grid */}
-        {[0, 50, 100].map(y => (
-          <line key={y} x1="20" y1={height - y/100*height} x2={width} y2={height - y/100*height}
-            stroke="#e5e7eb" strokeWidth="1" />
-        ))}
-        
-        {/* Lines */}
-        {['stress_level', 'energy_level', 'mood_level'].map((key, lineIdx) => {
-          const colors = ['#ef4444', '#eab308', '#22c55e'];
-          return (
-            <polyline key={key} fill="none" stroke={colors[lineIdx]} strokeWidth="2"
-              points={data.map((d, i) => 
-                `${i * 70 + 50},${height - (d[key] / 10 * height)}`
-              ).join(' ')} />
-          );
-        })}
-
-        {/* X Labels */}
-        {data.map((d, i) => (
-          <text key={i} x={i * 70 + 50} y={height + 20} textAnchor="middle"
-            fontSize="10" fill="#6b7280">
-            {new Date(d.date).toLocaleDateString('nl-NL', { day: 'numeric', month: 'short' })}
-          </text>
-        ))}
-      </svg>
-      
-      <div style={styles.legend}>
-        <span><span style={{ color: '#ef4444' }}>●</span> Stress</span>
-        <span><span style={{ color: '#eab308' }}>●</span> Energie</span>
-        <span><span style={{ color: '#22c55e' }}>●</span> Stemming</span>
-      </div>
-    </div>
-  );
-}
-
-// ============================================
-// AI INZICHTEN SECTION
-// ============================================
-
-function InzichtenSection({ insights, setInsights, setUnreadInsights }) {
-  async function markAsRead(id) {
-    await supabase.from('ai_insights').update({ is_read: true }).eq('id', id);
-    setInsights(prev => prev.map(i => i.id === id ? { ...i, is_read: true } : i));
-    setUnreadInsights(prev => Math.max(0, prev - 1));
-  }
-
-  const typeStyles = {
-    positive: { bg: '#dcfce7', border: '#22c55e' },
-    pattern: { bg: '#dbeafe', border: '#3b82f6' },
-    tip: { bg: '#fef3c7', border: '#eab308' },
-    warning: { bg: '#fee2e2', border: '#ef4444' },
+// Inzichten Section
+function InzichtenSection({ insights }) {
+  const typeColors = {
+    positive: '#10b981',
+    pattern: '#3b82f6',
+    tip: '#f59e0b',
+    warning: '#ef4444'
   };
 
   return (
     <div style={styles.section}>
-      <h1 style={styles.pageTitle}>🤖 AI Inzichten</h1>
-      <p style={styles.pageDesc}>Persoonlijke inzichten gebaseerd op je data.</p>
-
-      {insights.length > 0 ? (
-        <div style={styles.insightsList}>
-          {insights.map(insight => {
-            const style = typeStyles[insight.insight_type] || typeStyles.tip;
-            return (
-              <div 
-                key={insight.id}
-                onClick={() => !insight.is_read && markAsRead(insight.id)}
-                style={{
-                  ...styles.insightCard,
-                  backgroundColor: style.bg,
-                  borderLeft: `4px solid ${style.border}`,
-                  opacity: insight.is_read ? 0.7 : 1,
-                  cursor: insight.is_read ? 'default' : 'pointer'
-                }}
-              >
-                <div style={styles.insightHeader}>
-                  <span style={{ fontSize: '24px' }}>{insight.icon}</span>
-                  <span style={styles.insightTitle}>{insight.title}</span>
-                  {!insight.is_read && <span style={styles.newBadge}>Nieuw</span>}
-                </div>
-                <p style={styles.insightContent}>{insight.content}</p>
-                <span style={styles.insightDate}>
-                  {new Date(insight.generated_at).toLocaleDateString('nl-NL')}
-                </span>
-              </div>
-            );
-          })}
+      <h1 style={styles.pageTitle}>💡 AI Inzichten</h1>
+      <p style={styles.pageDesc}>Persoonlijke inzichten van je therapeut.</p>
+      
+      {insights.length === 0 ? (
+        <div style={styles.emptyState}>
+          <p>Nog geen inzichten beschikbaar.</p>
         </div>
       ) : (
-        <EmptyState icon="💡" text="Nog geen inzichten. Deze verschijnen na het invullen van vragenlijsten." />
+        <div style={styles.insightsList}>
+          {insights.map(insight => (
+            <div 
+              key={insight.id} 
+              style={{
+                ...styles.insightCard,
+                borderLeftColor: typeColors[insight.type] || '#64748b'
+              }}
+            >
+              <p style={styles.insightContent}>{insight.content}</p>
+              <span style={styles.insightDate}>
+                {new Date(insight.created_at).toLocaleDateString('nl-NL')}
+              </span>
+            </div>
+          ))}
+        </div>
       )}
     </div>
   );
 }
 
-// ============================================
-// SESSIE NOTITIES SECTION
-// ============================================
-
-function NotitiesSection({ notes }) {
-  const [expanded, setExpanded] = useState(null);
-
+// Notities Section
+function NotitiesSection({ sessionNotes }) {
   return (
     <div style={styles.section}>
       <h1 style={styles.pageTitle}>📝 Sessie Notities</h1>
-      <p style={styles.pageDesc}>Samenvattingen van je therapeut na elke sessie.</p>
-
-      {notes.length > 0 ? (
+      <p style={styles.pageDesc}>Notities van je sessies met je therapeut.</p>
+      
+      {sessionNotes.length === 0 ? (
+        <div style={styles.emptyState}>
+          <p>Nog geen sessie notities beschikbaar.</p>
+        </div>
+      ) : (
         <div style={styles.notesList}>
-          {notes.map(note => (
+          {sessionNotes.map(note => (
             <div key={note.id} style={styles.noteCard}>
-              <div 
-                style={styles.noteHeader}
-                onClick={() => setExpanded(expanded === note.id ? null : note.id)}
-              >
-                <div>
-                  <h3 style={styles.noteTitle}>{note.title}</h3>
-                  <span style={styles.noteDate}>
-                    {new Date(note.session_date).toLocaleDateString('nl-NL', {
-                      weekday: 'long', day: 'numeric', month: 'long'
-                    })}
-                  </span>
-                </div>
-                <span>{expanded === note.id ? '▼' : '▶'}</span>
+              <div style={styles.noteHeader}>
+                <span style={styles.noteDate}>
+                  📅 {new Date(note.session_date).toLocaleDateString('nl-NL')}
+                </span>
               </div>
-
-              {expanded === note.id && (
-                <div style={styles.noteBody}>
-                  <p>{note.summary}</p>
-                  
-                  {note.key_points?.length > 0 && (
-                    <div style={styles.noteSection}>
-                      <strong>Belangrijke punten:</strong>
-                      <ul>
-                        {note.key_points.map((point, i) => (
-                          <li key={i}>{point}</li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-
-                  {note.homework && (
-                    <div style={styles.noteSection}>
-                      <strong>📚 Huiswerk:</strong>
-                      <p>{note.homework}</p>
-                    </div>
-                  )}
-
-                  {note.next_focus && (
-                    <div style={styles.noteSection}>
-                      <strong>🎯 Volgende sessie:</strong>
-                      <p>{note.next_focus}</p>
-                    </div>
-                  )}
+              <p style={styles.noteSummary}>{note.summary}</p>
+              {note.homework && (
+                <div style={styles.noteHomework}>
+                  📚 <strong>Huiswerk:</strong> {note.homework}
                 </div>
               )}
             </div>
           ))}
         </div>
-      ) : (
-        <EmptyState icon="📝" text="Nog geen sessie notities beschikbaar." />
       )}
     </div>
   );
 }
 
-// ============================================
-// VRAGENLIJSTEN SECTION (Typeform)
-// ============================================
-
-function VragenlijstenSection() {
-  // Configure your Typeform IDs here
-  const typeforms = [
-    {
-      id: 'weekly',
-      title: 'Wekelijkse Check-in',
-      desc: 'Korte vragenlijst over je week (5 min)',
-      typeformId: 'bM30pflI', // Vervang met echte Typeform ID
-    },
-    {
-      id: 'intake',
-      title: 'Intake Vragenlijst',
-      desc: 'Uitgebreide vragenlijst voor nieuwe cliënten (15 min)',
-      typeformId: 'bM30pflI_2', // Vervang met echte Typeform ID
-    },
-  ];
-
-  const [selected, setSelected] = useState(null);
-
+// Vragenlijsten Section
+function VragenlijstenSection({ questionnaires }) {
   return (
     <div style={styles.section}>
       <h1 style={styles.pageTitle}>📋 Vragenlijsten</h1>
-      <p style={styles.pageDesc}>Vul vragenlijsten in om je voortgang te meten.</p>
+      <p style={styles.pageDesc}>Vul vragenlijsten in om je voortgang bij te houden.</p>
+      
+      <div style={styles.card}>
+        <h3 style={styles.cardTitle}>Beschikbare vragenlijsten</h3>
+        {questionnaires.length === 0 ? (
+          <p style={styles.emptyText}>Geen vragenlijsten beschikbaar.</p>
+        ) : (
+          <div style={styles.questionnaireList}>
+            {questionnaires.map(q => (
+              <div key={q.id} style={styles.questionnaireCard}>
+                <span style={styles.questionnaireTitle}>{q.title}</span>
+                <button style={styles.fillBtn}>Invullen</button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
 
-      {selected ? (
+      {/* Typeform embed placeholder */}
+      <div style={styles.card}>
+        <h3 style={styles.cardTitle}>Intake Vragenlijst</h3>
         <div style={styles.typeformContainer}>
-          <button style={styles.backBtn} onClick={() => setSelected(null)}>
-            ← Terug naar overzicht
-          </button>
           <iframe
-            src={`https://form.typeform.com/to/${selected.typeformId}`}
-            style={styles.typeformFrame}
-            frameBorder="0"
+            src="https://form.typeform.com/to/bM30pflI"
+            style={styles.typeformIframe}
+            title="Intake vragenlijst"
           />
         </div>
-      ) : (
-        <div style={styles.formsList}>
-          {typeforms.map(form => (
-            <div key={form.id} style={styles.formCard}>
-              <div>
-                <h3 style={styles.formTitle}>{form.title}</h3>
-                <p style={styles.formDesc}>{form.desc}</p>
-              </div>
-              <button style={styles.formBtn} onClick={() => setSelected(form)}>
-                Invullen →
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
-
-      <div style={styles.typeformNote}>
-        💡 Je antwoorden worden automatisch verwerkt en verschijnen in je voortgang.
       </div>
     </div>
   );
 }
 
-// ============================================
-// RAPPORTEN SECTION
-// ============================================
-
-function RapportenSection({ reports, setReports, setNewReports }) {
-  async function markViewed(id) {
-    await supabase.from('reports').update({ is_new: false }).eq('id', id);
-    setReports(prev => prev.map(r => r.id === id ? { ...r, is_new: false } : r));
-    setNewReports(prev => Math.max(0, prev - 1));
-  }
-
-  const fileIcons = { pdf: '📕', docx: '📘', default: '📄' };
-
+// Rapporten Section
+function RapportenSection({ reports }) {
   return (
     <div style={styles.section}>
       <h1 style={styles.pageTitle}>📄 Rapporten</h1>
-      <p style={styles.pageDesc}>Documenten en rapporten van je therapeut.</p>
-
-      {reports.length > 0 ? (
+      <p style={styles.pageDesc}>Bekijk rapporten van je therapeut.</p>
+      
+      {reports.length === 0 ? (
+        <div style={styles.emptyState}>
+          <p>Nog geen rapporten beschikbaar.</p>
+        </div>
+      ) : (
         <div style={styles.reportsList}>
           {reports.map(report => (
             <div key={report.id} style={styles.reportCard}>
-              <span style={{ fontSize: '32px' }}>
-                {fileIcons[report.file_type] || fileIcons.default}
-              </span>
+              <span style={styles.reportIcon}>📄</span>
               <div style={styles.reportInfo}>
-                <div style={styles.reportTitleRow}>
-                  <h3 style={styles.reportTitle}>{report.title}</h3>
-                  {report.is_new && <span style={styles.newBadge}>Nieuw</span>}
-                </div>
-                {report.description && <p style={styles.reportDesc}>{report.description}</p>}
-                <span style={styles.reportMeta}>
-                  {report.category} • {new Date(report.created_at).toLocaleDateString('nl-NL')}
+                <span style={styles.reportTitle}>{report.title}</span>
+                <span style={styles.reportDate}>
+                  {new Date(report.created_at).toLocaleDateString('nl-NL')}
                 </span>
               </div>
-              <a 
-                href={report.file_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                style={styles.downloadBtn}
-                onClick={() => report.is_new && markViewed(report.id)}
-              >
-                Download
-              </a>
+              {report.is_new && <span style={styles.newBadge}>Nieuw</span>}
             </div>
           ))}
         </div>
-      ) : (
-        <EmptyState icon="📄" text="Nog geen rapporten beschikbaar." />
       )}
     </div>
   );
 }
 
-// ============================================
-// AFSPRAKEN SECTION (Calendly)
-// ============================================
-
+// Afspraken Section
 function AfsprakenSection() {
-  // Configure your Calendly URL here
-  const calendlyUrl = "https://calendly.com/walterzantinge/30min?embed_domain=dynamicparenting.vercel.app&embed_type=Inline";
-
   return (
     <div style={styles.section}>
       <h1 style={styles.pageTitle}>📅 Afspraken</h1>
-      <p style={styles.pageDesc}>Plan een nieuwe sessie of bekijk je afspraken.</p>
-
-      <div style={styles.appointmentCard}>
-        <div>
-          <h3>Volgende afspraak</h3>
-          <p style={{ color: '#9ca3af', fontStyle: 'italic' }}>Geen geplande afspraak</p>
-        </div>
-        <a href={calendlyUrl} target="_blank" rel="noopener noreferrer" style={styles.calendlyBtn}>
-          📅 Plan nieuwe afspraak
-        </a>
-      </div>
-
+      <p style={styles.pageDesc}>Plan een afspraak met je therapeut.</p>
+      
       <div style={styles.card}>
-        <iframe
-          src={`${calendlyUrl}?hide_landing_page_details=1&hide_gdpr_banner=1`}
-          style={styles.calendlyFrame}
-          frameBorder="0"
-        />
+        <h3 style={styles.cardTitle}>Afspraak plannen</h3>
+        <div style={styles.calendlyContainer}>
+          <iframe
+            src="https://calendly.com/walterzantinge/30min?embed_domain=dynamicparenting.vercel.app&embed_type=Inline"
+            style={styles.calendlyIframe}
+            title="Plan een afspraak"
+          />
+        </div>
       </div>
     </div>
   );
 }
 
-// ============================================
-// BERICHTEN SECTION
-// ============================================
-
-function BerichtenSection({ messages, setMessages, userId, setUnreadMessages }) {
-  const [newMsg, setNewMsg] = useState('');
-  const [sending, setSending] = useState(false);
-  const messagesEndRef = useRef(null);
-
-  // Auto-scroll to bottom
+// Berichten Section
+function BerichtenSection({ messages, newMessage, setNewMessage, sendMessage, userId, therapist, messagesEndRef }) {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  // Mark as read on open
-  useEffect(() => {
-    markAllRead();
-  }, []);
-
-  async function markAllRead() {
-    await supabase
-      .from('messages')
-      .update({ is_read: true })
-      .eq('receiver_id', userId)
-      .eq('is_read', false);
-    setUnreadMessages(0);
-  }
-
-  async function sendMessage() {
-    if (!newMsg.trim() || sending) return;
-
-    // Get therapist ID (first message's other party)
-    const therapistId = messages.find(m => m.sender_id !== userId)?.sender_id 
-      || messages.find(m => m.receiver_id !== userId)?.receiver_id;
-
-    if (!therapistId) {
-      alert('Geen therapeut gevonden. Neem contact op via email.');
-      return;
-    }
-
-    setSending(true);
-    const { data, error } = await supabase
-      .from('messages')
-      .insert({
-        sender_id: userId,
-        receiver_id: therapistId,
-        content: newMsg.trim()
-      })
-      .select()
-      .single();
-
-    if (!error && data) {
-      setMessages(prev => [...prev, data]);
-      setNewMsg('');
-    }
-    setSending(false);
+  if (!therapist) {
+    return (
+      <div style={styles.section}>
+        <h1 style={styles.pageTitle}>💬 Berichten</h1>
+        <div style={styles.emptyState}>
+          <p>Je bent nog niet gekoppeld aan een therapeut.</p>
+        </div>
+      </div>
+    );
   }
 
   return (
     <div style={styles.section}>
       <h1 style={styles.pageTitle}>💬 Berichten</h1>
+      <p style={styles.pageDesc}>Chat met je therapeut.</p>
 
       <div style={styles.chatContainer}>
-        <div style={styles.messagesArea}>
-          {messages.length > 0 ? (
+        <div style={styles.chatHeader}>
+          <span style={styles.chatAvatar}>👩‍⚕️</span>
+          <span style={styles.chatName}>{therapist.full_name}</span>
+        </div>
+
+        <div style={styles.messagesContainer}>
+          {messages.length === 0 ? (
+            <p style={styles.emptyText}>Nog geen berichten. Start een gesprek!</p>
+          ) : (
             messages.map(msg => (
               <div 
-                key={msg.id}
+                key={msg.id} 
                 style={{
                   ...styles.message,
-                  ...(msg.sender_id === userId ? styles.msgSent : styles.msgReceived)
+                  ...(msg.sender_id === userId ? styles.messageSent : styles.messageReceived)
                 }}
               >
-                <p style={styles.msgText}>{msg.content}</p>
-                <span style={styles.msgTime}>
-                  {new Date(msg.created_at).toLocaleTimeString('nl-NL', {
-                    hour: '2-digit', minute: '2-digit'
-                  })}
+                <p style={styles.messageContent}>{msg.content}</p>
+                <span style={styles.messageTime}>
+                  {new Date(msg.created_at).toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit' })}
                 </span>
               </div>
             ))
-          ) : (
-            <div style={styles.emptyChat}>
-              <p>Nog geen berichten. Start een gesprek!</p>
-            </div>
           )}
           <div ref={messagesEndRef} />
         </div>
 
-        <div style={styles.inputArea}>
-          <textarea
-            value={newMsg}
-            onChange={(e) => setNewMsg(e.target.value)}
+        <div style={styles.chatInputContainer}>
+          <input
+            type="text"
+            value={newMessage}
+            onChange={(e) => setNewMessage(e.target.value)}
+            onKeyPress={(e) => e.key === 'Enter' && sendMessage()}
+            style={styles.chatInput}
             placeholder="Typ je bericht..."
-            style={styles.textarea}
-            onKeyPress={(e) => e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), sendMessage())}
           />
-          <button 
-            onClick={sendMessage}
-            disabled={sending || !newMsg.trim()}
-            style={styles.sendBtn}
-          >
-            {sending ? '...' : 'Verstuur'}
+          <button onClick={sendMessage} style={styles.sendBtn}>
+            Verstuur
           </button>
         </div>
       </div>
@@ -822,90 +577,56 @@ function BerichtenSection({ messages, setMessages, userId, setUnreadMessages }) 
   );
 }
 
-// ============================================
-// EMPTY STATE COMPONENT
-// ============================================
-
-function EmptyState({ icon, text }) {
-  return (
-    <div style={styles.emptyState}>
-      <span style={{ fontSize: '48px' }}>{icon}</span>
-      <p>{text}</p>
-    </div>
-  );
-}
-
-// ============================================
-// STYLES
-// ============================================
-
+// Styles
 const styles = {
   container: {
     display: 'flex',
     minHeight: '100vh',
     backgroundColor: '#f8fafc',
-    fontFamily: '"DM Sans", -apple-system, sans-serif',
   },
-
+  
   // Sidebar
   sidebar: {
     width: '260px',
-    backgroundColor: '#1e293b',
+    backgroundColor: '#1e3a5f',
     color: 'white',
-    position: 'fixed',
-    height: '100vh',
     display: 'flex',
     flexDirection: 'column',
+    position: 'fixed',
+    height: '100vh',
   },
   logo: {
-    padding: '24px 20px',
+    padding: '24px',
     display: 'flex',
     alignItems: 'center',
     gap: '12px',
     borderBottom: '1px solid rgba(255,255,255,0.1)',
   },
   logoIcon: { fontSize: '28px' },
-  logoText: { fontSize: '16px', fontWeight: '600', color: '#93C5FD' },
-  nav: {
-    flex: 1,
-    padding: '16px 12px',
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '4px',
-  },
+  logoText: { fontSize: '18px', fontWeight: '600', color: '#5cb85c' },
+  nav: { flex: 1, padding: '16px 0' },
   navItem: {
     display: 'flex',
     alignItems: 'center',
     gap: '12px',
-    padding: '12px 16px',
-    borderRadius: '8px',
-    border: 'none',
-    backgroundColor: 'transparent',
-    color: '#94a3b8',
-    cursor: 'pointer',
     width: '100%',
+    padding: '14px 24px',
+    border: 'none',
+    background: 'transparent',
+    color: 'rgba(255,255,255,0.7)',
+    fontSize: '15px',
+    cursor: 'pointer',
     textAlign: 'left',
-    fontSize: '14px',
     transition: 'all 0.2s',
   },
   navItemActive: {
-    backgroundColor: 'rgba(147, 197, 253, 0.2)',
+    backgroundColor: 'rgba(255,255,255,0.1)',
     color: 'white',
+    borderLeft: '3px solid #5cb85c',
   },
-  navIcon: { fontSize: '18px', width: '24px' },
-  navLabel: { flex: 1 },
-  badge: {
-    backgroundColor: '#ef4444',
-    color: 'white',
-    fontSize: '11px',
-    fontWeight: '600',
-    padding: '2px 6px',
-    borderRadius: '10px',
-    minWidth: '18px',
-    textAlign: 'center',
-  },
+  navIcon: { fontSize: '18px' },
   userSection: {
-    padding: '16px',
+    padding: '20px',
     borderTop: '1px solid rgba(255,255,255,0.1)',
     display: 'flex',
     alignItems: 'center',
@@ -915,18 +636,18 @@ const styles = {
     width: '40px',
     height: '40px',
     borderRadius: '50%',
-    backgroundColor: '#3D5A80',
+    backgroundColor: 'rgba(255,255,255,0.2)',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    fontWeight: '600',
+    fontSize: '20px',
   },
-  userInfo: { display: 'flex', flexDirection: 'column', gap: '4px' },
+  userInfo: { display: 'flex', flexDirection: 'column' },
   userName: { fontSize: '14px', fontWeight: '500' },
   logoutBtn: {
-    background: 'none',
+    background: 'transparent',
     border: 'none',
-    color: '#64748b',
+    color: 'rgba(255,255,255,0.6)',
     fontSize: '12px',
     cursor: 'pointer',
     padding: 0,
@@ -938,314 +659,261 @@ const styles = {
     flex: 1,
     marginLeft: '260px',
     padding: '32px',
-    minHeight: '100vh',
   },
+
+  // Therapist Banner
+  therapistBanner: {
+    backgroundColor: '#e0f2fe',
+    borderRadius: '12px',
+    padding: '16px 24px',
+    marginBottom: '24px',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '16px',
+    border: '1px solid #7dd3fc',
+  },
+  therapistIcon: { fontSize: '32px' },
+  therapistLabel: { 
+    fontSize: '13px', 
+    color: '#0369a1',
+    display: 'block',
+  },
+  therapistName: { 
+    fontSize: '18px', 
+    fontWeight: '600', 
+    color: '#0c4a6e',
+    display: 'block',
+  },
+
   section: { maxWidth: '900px' },
   pageTitle: {
     fontSize: '28px',
-    fontWeight: '600',
-    color: '#1e293b',
+    fontWeight: '700',
+    color: '#1e3a5f',
     marginBottom: '8px',
   },
-  pageDesc: {
-    color: '#64748b',
-    marginBottom: '32px',
-  },
-
-  // Cards
-  card: {
-    backgroundColor: 'white',
-    padding: '24px',
-    borderRadius: '12px',
-    boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
-    marginBottom: '24px',
-  },
-  cardTitle: {
-    fontSize: '16px',
-    fontWeight: '600',
-    color: '#374151',
-    marginBottom: '16px',
-    marginTop: 0,
-  },
+  pageDesc: { color: '#64748b', marginBottom: '32px' },
 
   // Stats
   statsGrid: {
     display: 'grid',
     gridTemplateColumns: 'repeat(3, 1fr)',
     gap: '20px',
-    marginBottom: '24px',
+    marginBottom: '32px',
   },
   statCard: {
     backgroundColor: 'white',
-    padding: '24px',
     borderRadius: '12px',
-    boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+    padding: '24px',
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',
-    gap: '8px',
+    boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
   },
-  statValue: { fontSize: '28px', fontWeight: '700', color: '#1e293b' },
-  statLabel: { fontSize: '14px', color: '#6b7280' },
+  statEmoji: { fontSize: '32px', marginBottom: '8px' },
+  statNumber: { fontSize: '36px', fontWeight: '700', color: '#1e3a5f' },
+  statLabel: { color: '#64748b', fontSize: '14px' },
 
-  // Actions
-  actionBtns: { display: 'flex', gap: '12px', flexWrap: 'wrap' },
+  // Cards
+  card: {
+    backgroundColor: 'white',
+    borderRadius: '12px',
+    padding: '24px',
+    marginBottom: '24px',
+    boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+  },
+  cardTitle: {
+    fontSize: '18px',
+    fontWeight: '600',
+    color: '#1e3a5f',
+    marginBottom: '16px',
+  },
+
+  // Quick Actions
+  quickActions: { display: 'flex', gap: '12px', flexWrap: 'wrap' },
   actionBtn: {
-    padding: '12px 20px',
-    backgroundColor: '#3D5A80',
+    backgroundColor: '#1e3a5f',
     color: 'white',
     border: 'none',
+    padding: '12px 20px',
     borderRadius: '8px',
     cursor: 'pointer',
     fontSize: '14px',
     fontWeight: '500',
   },
 
-  // Chart
-  legend: {
-    display: 'flex',
-    gap: '20px',
-    justifyContent: 'center',
-    marginTop: '16px',
-    fontSize: '13px',
-    color: '#6b7280',
-  },
-
-  // History
-  historyItem: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: '12px 0',
-    borderBottom: '1px solid #f3f4f6',
-  },
-  historyDate: { fontWeight: '500', color: '#374151' },
-  historyValues: { display: 'flex', gap: '16px', fontSize: '14px', color: '#6b7280' },
-
   // Insights
-  insightPreview: { display: 'flex', gap: '16px', alignItems: 'flex-start' },
+  insightText: { color: '#334155', lineHeight: '1.6' },
   insightsList: { display: 'flex', flexDirection: 'column', gap: '16px' },
-  insightCard: { padding: '20px', borderRadius: '12px', transition: 'all 0.2s' },
-  insightHeader: { display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' },
-  insightTitle: { fontWeight: '600', color: '#1e293b', flex: 1 },
-  insightContent: { color: '#4b5563', fontSize: '14px', margin: 0, lineHeight: 1.6 },
-  insightDate: { fontSize: '12px', color: '#9ca3af', marginTop: '12px', display: 'block' },
-  newBadge: {
-    backgroundColor: '#22c55e',
-    color: 'white',
-    fontSize: '11px',
-    fontWeight: '600',
-    padding: '2px 8px',
-    borderRadius: '10px',
+  insightCard: {
+    backgroundColor: 'white',
+    borderRadius: '12px',
+    padding: '20px',
+    borderLeft: '4px solid',
+    boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
   },
+  insightContent: { color: '#334155', lineHeight: '1.6', marginBottom: '8px' },
+  insightDate: { fontSize: '13px', color: '#64748b' },
+
+  // Progress
+  progressList: { display: 'flex', flexDirection: 'column', gap: '12px' },
+  progressCard: {
+    backgroundColor: 'white',
+    borderRadius: '12px',
+    padding: '16px 20px',
+    boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+  },
+  progressDate: { fontSize: '14px', fontWeight: '600', color: '#1e3a5f', display: 'block', marginBottom: '8px' },
+  progressScores: { display: 'flex', gap: '20px', color: '#64748b', fontSize: '14px' },
 
   // Notes
-  notesList: { display: 'flex', flexDirection: 'column', gap: '12px' },
+  notesList: { display: 'flex', flexDirection: 'column', gap: '16px' },
   noteCard: {
     backgroundColor: 'white',
     borderRadius: '12px',
-    boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
-    overflow: 'hidden',
-  },
-  noteHeader: {
     padding: '20px',
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    cursor: 'pointer',
+    boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+    borderLeft: '4px solid #1e3a5f',
   },
-  noteTitle: { fontSize: '16px', fontWeight: '600', color: '#1e293b', margin: 0 },
-  noteDate: { fontSize: '13px', color: '#6b7280' },
-  noteBody: { padding: '0 20px 20px', borderTop: '1px solid #e5e7eb' },
-  noteSection: {
-    marginTop: '16px',
-    padding: '16px',
-    backgroundColor: '#f9fafb',
+  noteHeader: { marginBottom: '12px' },
+  noteDate: { fontSize: '14px', color: '#64748b' },
+  noteSummary: { color: '#334155', lineHeight: '1.6', marginBottom: '12px' },
+  noteHomework: {
+    backgroundColor: '#e0f2fe',
+    padding: '12px',
     borderRadius: '8px',
+    fontSize: '14px',
+    color: '#0369a1',
   },
 
-  // Forms
-  formsList: { display: 'flex', flexDirection: 'column', gap: '12px' },
-  formCard: {
-    backgroundColor: 'white',
-    padding: '20px',
-    borderRadius: '12px',
-    boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+  // Questionnaires
+  questionnaireList: { display: 'flex', flexDirection: 'column', gap: '12px' },
+  questionnaireCard: {
     display: 'flex',
     justifyContent: 'space-between',
     alignItems: 'center',
+    padding: '12px',
+    backgroundColor: '#f8fafc',
+    borderRadius: '8px',
   },
-  formTitle: { fontSize: '16px', fontWeight: '600', color: '#1e293b', margin: '0 0 4px' },
-  formDesc: { fontSize: '14px', color: '#6b7280', margin: 0 },
-  formBtn: {
-    padding: '10px 20px',
-    backgroundColor: '#3D5A80',
+  questionnaireTitle: { fontWeight: '500', color: '#334155' },
+  fillBtn: {
+    backgroundColor: '#5cb85c',
     color: 'white',
     border: 'none',
-    borderRadius: '8px',
+    padding: '8px 16px',
+    borderRadius: '6px',
     cursor: 'pointer',
-    fontSize: '14px',
-    fontWeight: '500',
+    fontSize: '13px',
   },
-  typeformContainer: {
-    backgroundColor: 'white',
-    borderRadius: '12px',
-    overflow: 'hidden',
-    boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
-  },
-  backBtn: {
-    padding: '16px 20px',
-    backgroundColor: '#f3f4f6',
-    border: 'none',
-    width: '100%',
-    textAlign: 'left',
-    cursor: 'pointer',
-    fontSize: '14px',
-    color: '#3D5A80',
-    fontWeight: '500',
-  },
-  typeformFrame: { width: '100%', height: '600px', border: 'none' },
-  typeformNote: {
-    marginTop: '24px',
-    padding: '16px',
-    backgroundColor: '#fef3c7',
-    borderRadius: '8px',
-    fontSize: '14px',
-    color: '#92400e',
-  },
+  typeformContainer: { height: '500px', borderRadius: '8px', overflow: 'hidden' },
+  typeformIframe: { width: '100%', height: '100%', border: 'none' },
 
   // Reports
   reportsList: { display: 'flex', flexDirection: 'column', gap: '12px' },
   reportCard: {
-    backgroundColor: 'white',
-    padding: '20px',
-    borderRadius: '12px',
-    boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
     display: 'flex',
     alignItems: 'center',
-    gap: '16px',
+    gap: '12px',
+    padding: '16px',
+    backgroundColor: 'white',
+    borderRadius: '12px',
+    boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
   },
-  reportInfo: { flex: 1 },
-  reportTitleRow: { display: 'flex', alignItems: 'center', gap: '8px' },
-  reportTitle: { fontSize: '16px', fontWeight: '600', color: '#1e293b', margin: 0 },
-  reportDesc: { fontSize: '14px', color: '#6b7280', margin: '4px 0 0' },
-  reportMeta: { fontSize: '12px', color: '#9ca3af' },
-  downloadBtn: {
-    padding: '10px 20px',
-    backgroundColor: '#f3f4f6',
-    color: '#374151',
-    border: 'none',
-    borderRadius: '8px',
-    cursor: 'pointer',
-    fontSize: '14px',
-    fontWeight: '500',
-    textDecoration: 'none',
+  reportIcon: { fontSize: '24px' },
+  reportInfo: { flex: 1, display: 'flex', flexDirection: 'column' },
+  reportTitle: { fontWeight: '500', color: '#334155' },
+  reportDate: { fontSize: '13px', color: '#64748b' },
+  newBadge: {
+    backgroundColor: '#ef4444',
+    color: 'white',
+    padding: '4px 10px',
+    borderRadius: '12px',
+    fontSize: '11px',
+    fontWeight: '600',
   },
 
-  // Appointments
-  appointmentCard: {
-    backgroundColor: 'white',
-    padding: '24px',
-    borderRadius: '12px',
-    boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
-    marginBottom: '24px',
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  calendlyBtn: {
-    padding: '14px 28px',
-    backgroundColor: '#3D5A80',
-    color: 'white',
-    border: 'none',
-    borderRadius: '8px',
-    cursor: 'pointer',
-    fontSize: '15px',
-    fontWeight: '500',
-    textDecoration: 'none',
-  },
-  calendlyFrame: { width: '100%', height: '650px', border: 'none' },
+  // Calendly
+  calendlyContainer: { height: '600px', borderRadius: '8px', overflow: 'hidden' },
+  calendlyIframe: { width: '100%', height: '100%', border: 'none' },
 
   // Chat
   chatContainer: {
     backgroundColor: 'white',
     borderRadius: '12px',
+    overflow: 'hidden',
     boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
-    display: 'flex',
-    flexDirection: 'column',
-    height: '600px',
   },
-  messagesArea: {
-    flex: 1,
-    padding: '20px',
-    overflowY: 'auto',
+  chatHeader: {
+    backgroundColor: '#1e3a5f',
+    color: 'white',
+    padding: '16px 20px',
     display: 'flex',
-    flexDirection: 'column',
+    alignItems: 'center',
     gap: '12px',
+  },
+  chatAvatar: { fontSize: '24px' },
+  chatName: { fontWeight: '500' },
+  messagesContainer: {
+    height: '400px',
+    overflowY: 'auto',
+    padding: '20px',
+    backgroundColor: '#f8fafc',
   },
   message: {
     maxWidth: '70%',
     padding: '12px 16px',
-    borderRadius: '12px',
+    borderRadius: '16px',
+    marginBottom: '12px',
   },
-  msgSent: {
-    alignSelf: 'flex-end',
-    backgroundColor: '#3D5A80',
+  messageSent: {
+    backgroundColor: '#1e3a5f',
     color: 'white',
+    marginLeft: 'auto',
     borderBottomRightRadius: '4px',
   },
-  msgReceived: {
-    alignSelf: 'flex-start',
-    backgroundColor: '#f3f4f6',
-    color: '#1e293b',
+  messageReceived: {
+    backgroundColor: 'white',
+    color: '#334155',
+    marginRight: 'auto',
     borderBottomLeftRadius: '4px',
+    boxShadow: '0 1px 2px rgba(0,0,0,0.1)',
   },
-  msgText: { margin: 0, fontSize: '14px', lineHeight: 1.5 },
-  msgTime: { fontSize: '11px', opacity: 0.7, marginTop: '4px', display: 'block' },
-  emptyChat: {
-    flex: 1,
+  messageContent: { margin: 0, lineHeight: '1.5' },
+  messageTime: { fontSize: '11px', opacity: 0.7, display: 'block', marginTop: '4px' },
+  chatInputContainer: {
     display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    color: '#9ca3af',
-  },
-  inputArea: {
     padding: '16px',
-    borderTop: '1px solid #e5e7eb',
-    display: 'flex',
     gap: '12px',
+    borderTop: '1px solid #e2e8f0',
   },
-  textarea: {
+  chatInput: {
     flex: 1,
-    padding: '12px',
-    border: '1px solid #e5e7eb',
-    borderRadius: '8px',
-    resize: 'none',
-    fontSize: '14px',
-    minHeight: '44px',
-    maxHeight: '120px',
-    fontFamily: 'inherit',
+    padding: '12px 16px',
+    border: '2px solid #e2e8f0',
+    borderRadius: '24px',
+    outline: 'none',
+    fontSize: '15px',
   },
   sendBtn: {
-    padding: '12px 24px',
-    backgroundColor: '#3D5A80',
+    backgroundColor: '#1e3a5f',
     color: 'white',
     border: 'none',
-    borderRadius: '8px',
+    padding: '12px 24px',
+    borderRadius: '24px',
     cursor: 'pointer',
-    fontSize: '14px',
-    fontWeight: '500',
+    fontWeight: '600',
   },
 
-  // Empty state
+  // Empty states
   emptyState: {
     textAlign: 'center',
     padding: '60px 20px',
-    color: '#6b7280',
     backgroundColor: 'white',
     borderRadius: '12px',
-    boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+    color: '#64748b',
   },
+  emptyText: { color: '#64748b', fontStyle: 'italic' },
 
   // Loading
   loadingContainer: {
@@ -1254,49 +922,14 @@ const styles = {
     alignItems: 'center',
     justifyContent: 'center',
     height: '100vh',
-    gap: '16px',
+    color: '#64748b',
   },
   spinner: {
     width: '40px',
     height: '40px',
-    border: '3px solid #e5e7eb',
-    borderTop: '3px solid #3D5A80',
+    border: '4px solid #e2e8f0',
+    borderTopColor: '#1e3a5f',
     borderRadius: '50%',
     animation: 'spin 1s linear infinite',
   },
-
-  // Login
-  loginContainer: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    height: '100vh',
-    backgroundColor: '#f8fafc',
-  },
-  loginBox: {
-    textAlign: 'center',
-    padding: '48px',
-    backgroundColor: 'white',
-    borderRadius: '16px',
-    boxShadow: '0 4px 6px rgba(0,0,0,0.1)',
-    maxWidth: '400px',
-  },
-  loginButton: {
-    display: 'inline-block',
-    padding: '14px 32px',
-    backgroundColor: '#3D5A80',
-    color: 'white',
-    textDecoration: 'none',
-    borderRadius: '8px',
-    fontSize: '16px',
-    fontWeight: '500',
-    marginTop: '16px',
-  },
 };
-
-// Add keyframes for spinner
-if (typeof document !== 'undefined') {
-  const style = document.createElement('style');
-  style.textContent = `@keyframes spin { to { transform: rotate(360deg); } }`;
-  document.head.appendChild(style);
-}
