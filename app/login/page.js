@@ -1,118 +1,302 @@
-'use client'
+'use client';
 
-import { useState } from 'react'
-import { useRouter } from 'next/navigation'
-import Link from 'next/link'
-import { supabase } from '@/lib/supabase'
+import { useState } from 'react';
+import { supabase } from '../../lib/supabase';
+import Link from 'next/link';
 
 export default function LoginPage() {
-  const router = useRouter()
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
 
-  const handleLogin = async (e) => {
-    e.preventDefault()
-    setLoading(true)
-    setError('')
+  async function handleLogin(e) {
+    e.preventDefault();
+    setLoading(true);
+    setError('');
 
     try {
-      const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+      const { data, error: signInError } = await supabase.auth.signInWithPassword({
         email,
         password,
-      })
+      });
 
-      if (authError) throw authError
+      if (signInError) throw signInError;
 
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('role')
-        .eq('id', authData.user.id)
-        .single()
+      if (data.user) {
+        // Get user profile to check role
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('role')
+          .eq('id', data.user.id)
+          .single();
 
-      if (profile?.role === 'therapist') {
-        router.push('/therapeut')
-      } else {
-        router.push('/portaal')
+        // Redirect based on role
+        if (profile?.role === 'therapist') {
+          window.location.href = '/therapeut';
+        } else {
+          window.location.href = '/portal';
+        }
       }
-
     } catch (err) {
-      setError(err.message || 'Er ging iets mis bij het inloggen')
+      setError(err.message || 'Er is iets misgegaan. Probeer het opnieuw.');
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
   }
 
   return (
-    <div style={{ minHeight: '100vh', backgroundColor: '#FDF8F3', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}>
-      <div style={{ maxWidth: '400px', width: '100%' }}>
-        <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
-          <Link href="/" style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#3D5A80', fontFamily: 'var(--font-playfair)' }}>
-            Dynamic Parenting
-          </Link>
-          <p style={{ color: '#5B7FA3', marginTop: '0.5rem' }}>Welkom terug</p>
+    <div style={styles.container}>
+      <div style={styles.card}>
+        {/* Logo */}
+        <div style={styles.logoSection}>
+          <span style={styles.logoIcon}>🌿</span>
+          <h1 style={styles.logoText}>Dynamic Parenting</h1>
+          <p style={styles.tagline}>Welkom terug</p>
         </div>
 
-        <div style={{ backgroundColor: 'white', borderRadius: '16px', boxShadow: '0 4px 20px rgba(0,0,0,0.1)', padding: '2rem' }}>
-          <h1 style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#3D5A80', marginBottom: '1.5rem', textAlign: 'center', fontFamily: 'var(--font-playfair)' }}>
-            Inloggen
-          </h1>
+        {/* Role Info */}
+        <div style={styles.roleInfo}>
+          <div style={styles.roleCard}>
+            <span style={styles.roleIcon}>👤</span>
+            <div>
+              <strong>Patiënt?</strong>
+              <p style={styles.roleDesc}>Log in om je voortgang te bekijken</p>
+            </div>
+          </div>
+          <div style={styles.roleCard}>
+            <span style={styles.roleIcon}>👩‍⚕️</span>
+            <div>
+              <strong>Therapeut?</strong>
+              <p style={styles.roleDesc}>Log in om je patiënten te beheren</p>
+            </div>
+          </div>
+        </div>
 
+        {/* Login Form */}
+        <form onSubmit={handleLogin} style={styles.form}>
+          <h2 style={styles.formTitle}>Inloggen</h2>
+          
           {error && (
-            <div style={{ backgroundColor: '#FEE2E2', border: '1px solid #FECACA', color: '#DC2626', padding: '0.75rem 1rem', borderRadius: '8px', marginBottom: '1.5rem', fontSize: '0.9rem' }}>
+            <div style={styles.errorBox}>
               {error}
             </div>
           )}
 
-          <form onSubmit={handleLogin}>
-            <div style={{ marginBottom: '1rem' }}>
-              <label style={{ display: 'block', fontSize: '0.9rem', fontWeight: '500', color: '#3D5A80', marginBottom: '0.5rem' }}>
-                E-mailadres
-              </label>
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                style={{ width: '100%', padding: '0.75rem 1rem', border: '1px solid #E8DDD1', borderRadius: '8px', fontSize: '1rem' }}
-                placeholder="naam@voorbeeld.nl"
-              />
-            </div>
+          <div style={styles.inputGroup}>
+            <label style={styles.label}>E-mailadres</label>
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              style={styles.input}
+              placeholder="naam@voorbeeld.nl"
+              required
+            />
+          </div>
 
-            <div style={{ marginBottom: '1.5rem' }}>
-              <label style={{ display: 'block', fontSize: '0.9rem', fontWeight: '500', color: '#3D5A80', marginBottom: '0.5rem' }}>
-                Wachtwoord
-              </label>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                style={{ width: '100%', padding: '0.75rem 1rem', border: '1px solid #E8DDD1', borderRadius: '8px', fontSize: '1rem' }}
-                placeholder="••••••••"
-              />
-            </div>
+          <div style={styles.inputGroup}>
+            <label style={styles.label}>Wachtwoord</label>
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              style={styles.input}
+              placeholder="••••••••"
+              required
+            />
+          </div>
 
-            <button
-              type="submit"
-              disabled={loading}
-              style={{ width: '100%', backgroundColor: '#3D5A80', color: 'white', padding: '0.75rem 1rem', borderRadius: '8px', fontWeight: '500', fontSize: '1rem', border: 'none', cursor: loading ? 'not-allowed' : 'pointer', opacity: loading ? 0.5 : 1 }}
-            >
-              {loading ? 'Bezig met inloggen...' : 'Inloggen'}
-            </button>
-          </form>
+          <button 
+            type="submit" 
+            style={{
+              ...styles.submitBtn,
+              opacity: loading ? 0.7 : 1
+            }}
+            disabled={loading}
+          >
+            {loading ? 'Bezig met inloggen...' : 'Inloggen'}
+          </button>
+        </form>
 
-          <p style={{ marginTop: '1.5rem', textAlign: 'center', color: '#5B7FA3' }}>
-            Nog geen account?{' '}
-            <Link href="/registreren" style={{ color: '#3D5A80', fontWeight: '500' }}>Registreren</Link>
-          </p>
-        </div>
-
-        <p style={{ textAlign: 'center', marginTop: '1.5rem' }}>
-          <Link href="/" style={{ color: '#5B7FA3' }}>← Terug naar de website</Link>
+        {/* Register Link */}
+        <p style={styles.registerText}>
+          Nog geen account?{' '}
+          <Link href="/registreren" style={styles.registerLink}>
+            Registreren
+          </Link>
         </p>
+
+        {/* Back to Website */}
+        <Link href="/" style={styles.backLink}>
+          ← Terug naar de website
+        </Link>
+      </div>
+
+      {/* Info Box */}
+      <div style={styles.infoBox}>
+        <h3 style={styles.infoTitle}>ℹ️ Hoe werkt het?</h3>
+        <ul style={styles.infoList}>
+          <li><strong>Patiënten</strong> worden automatisch naar het patiënt portaal geleid</li>
+          <li><strong>Therapeuten</strong> worden automatisch naar het therapeut portaal geleid</li>
+          <li>Je rol wordt bepaald door je account instellingen</li>
+        </ul>
       </div>
     </div>
-  )
+  );
 }
+
+const styles = {
+  container: {
+    minHeight: '100vh',
+    backgroundColor: '#faf8f5',
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: '40px 20px',
+  },
+  card: {
+    backgroundColor: 'white',
+    borderRadius: '16px',
+    padding: '40px',
+    width: '100%',
+    maxWidth: '440px',
+    boxShadow: '0 4px 20px rgba(0,0,0,0.08)',
+  },
+  logoSection: {
+    textAlign: 'center',
+    marginBottom: '24px',
+  },
+  logoIcon: {
+    fontSize: '48px',
+    display: 'block',
+    marginBottom: '12px',
+  },
+  logoText: {
+    fontSize: '24px',
+    fontWeight: '700',
+    color: '#1e3a5f',
+    margin: 0,
+  },
+  tagline: {
+    color: '#64748b',
+    fontSize: '15px',
+    marginTop: '4px',
+  },
+  roleInfo: {
+    display: 'flex',
+    gap: '12px',
+    marginBottom: '24px',
+  },
+  roleCard: {
+    flex: 1,
+    display: 'flex',
+    alignItems: 'flex-start',
+    gap: '10px',
+    padding: '12px',
+    backgroundColor: '#f8fafc',
+    borderRadius: '10px',
+    fontSize: '13px',
+  },
+  roleIcon: {
+    fontSize: '24px',
+  },
+  roleDesc: {
+    margin: '4px 0 0 0',
+    color: '#64748b',
+    fontSize: '12px',
+  },
+  form: {
+    marginBottom: '20px',
+  },
+  formTitle: {
+    fontSize: '20px',
+    fontWeight: '600',
+    color: '#1e3a5f',
+    marginBottom: '20px',
+    textAlign: 'center',
+  },
+  errorBox: {
+    backgroundColor: '#fef2f2',
+    color: '#dc2626',
+    padding: '12px 16px',
+    borderRadius: '8px',
+    marginBottom: '16px',
+    fontSize: '14px',
+    border: '1px solid #fecaca',
+  },
+  inputGroup: {
+    marginBottom: '16px',
+  },
+  label: {
+    display: 'block',
+    marginBottom: '6px',
+    fontSize: '14px',
+    fontWeight: '500',
+    color: '#334155',
+  },
+  input: {
+    width: '100%',
+    padding: '12px 16px',
+    fontSize: '15px',
+    border: '2px solid #e2e8f0',
+    borderRadius: '10px',
+    outline: 'none',
+    transition: 'border-color 0.2s',
+    boxSizing: 'border-box',
+  },
+  submitBtn: {
+    width: '100%',
+    padding: '14px',
+    backgroundColor: '#1e3a5f',
+    color: 'white',
+    border: 'none',
+    borderRadius: '10px',
+    fontSize: '16px',
+    fontWeight: '600',
+    cursor: 'pointer',
+    marginTop: '8px',
+    transition: 'background-color 0.2s',
+  },
+  registerText: {
+    textAlign: 'center',
+    color: '#64748b',
+    fontSize: '14px',
+    marginBottom: '16px',
+  },
+  registerLink: {
+    color: '#1e3a5f',
+    fontWeight: '600',
+    textDecoration: 'none',
+  },
+  backLink: {
+    display: 'block',
+    textAlign: 'center',
+    color: '#64748b',
+    fontSize: '14px',
+    textDecoration: 'none',
+  },
+  infoBox: {
+    marginTop: '24px',
+    padding: '20px',
+    backgroundColor: '#e0f2fe',
+    borderRadius: '12px',
+    maxWidth: '440px',
+    width: '100%',
+  },
+  infoTitle: {
+    fontSize: '15px',
+    fontWeight: '600',
+    color: '#0369a1',
+    marginBottom: '12px',
+    marginTop: 0,
+  },
+  infoList: {
+    margin: 0,
+    paddingLeft: '20px',
+    color: '#0c4a6e',
+    fontSize: '13px',
+    lineHeight: '1.8',
+  },
+};
