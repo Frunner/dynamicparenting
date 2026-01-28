@@ -1,3 +1,5 @@
+@@ -1,222 +1,1308 @@
+import Link from 'next/link'
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
@@ -24,16 +26,17 @@ export default function TherapeutDashboard() {
   
   const messagesEndRef = useRef(null);
 
+  // Load user and check if therapist
   useEffect(() => {
     loadUser();
   }, []);
 
   useEffect(() => {
-    if (user && profile) {
+    if (user) {
       loadAllData();
       subscribeToMessages();
     }
-  }, [user, profile]);
+  }, [user]);
 
   useEffect(() => {
     if (selectedPatient) {
@@ -71,12 +74,11 @@ export default function TherapeutDashboard() {
   }
 
   async function loadAllData() {
-    // Load only patients assigned to this therapist
+    // Load all patients
     const { data: patientsData } = await supabase
       .from('profiles')
       .select('*')
-      .eq('role', 'patient')
-      .eq('therapist_id', user.id);
+      .eq('role', 'patient');
     
     if (patientsData) setPatients(patientsData);
   }
@@ -180,6 +182,8 @@ export default function TherapeutDashboard() {
     const file = e.target.files[0];
     if (!file || !selectedPatient) return;
 
+    // For now, we'll store the file name and a placeholder URL
+    // In production, you'd upload to Supabase Storage
     const { error } = await supabase
       .from('reports')
       .insert({
@@ -227,14 +231,36 @@ export default function TherapeutDashboard() {
 
   const menuItems = [
     { id: 'overzicht', label: 'Overzicht', icon: '🏠' },
-    { id: 'patienten', label: 'Mijn Patiënten', icon: '👥' },
+    { id: 'patienten', label: 'Patiënten', icon: '👥' },
     { id: 'notities', label: 'Sessie Notities', icon: '📝' },
     { id: 'inzichten', label: 'AI Inzichten', icon: '💡' },
     { id: 'rapporten', label: 'Rapporten', icon: '📄' },
     { id: 'berichten', label: 'Berichten', icon: '💬' },
   ];
 
+export default function Home() {
   return (
+    <div style={{ minHeight: '100vh', backgroundColor: '#FDF8F3' }}>
+      {/* Navigation */}
+      <nav style={{ 
+        backgroundColor: 'white', 
+        padding: '1rem 2rem', 
+        boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+        position: 'sticky',
+        top: 0,
+        zIndex: 100
+      }}>
+        <div style={{ maxWidth: '1200px', margin: '0 auto', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
+          <Link href="/" style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#3D5A80', fontFamily: 'var(--font-playfair)' }}>
+            Dynamic Parenting
+          </Link>
+          <div style={{ display: 'flex', gap: '2rem', flexWrap: 'wrap' }}>
+            <Link href="/" style={{ color: '#3D5A80', fontWeight: '500' }}>Home</Link>
+            <Link href="/diensten" style={{ color: '#5B7FA3' }}>Diensten</Link>
+            <Link href="/over-mij" style={{ color: '#5B7FA3' }}>Over Mij</Link>
+            <Link href="/blog" style={{ color: '#5B7FA3' }}>Blog</Link>
+            <Link href="/contact" style={{ color: '#5B7FA3' }}>Contact</Link>
+          </div>
     <div style={styles.container}>
       {/* Sidebar */}
       <aside style={styles.sidebar}>
@@ -242,11 +268,58 @@ export default function TherapeutDashboard() {
           <span style={styles.logoIcon}>🌿</span>
           <span style={styles.logoText}>Dynamic Parenting</span>
         </div>
-        
-        {/* Role Badge */}
-        <div style={styles.roleBadge}>
-          👩‍⚕️ Therapeut Portal
-        </div>
+      </nav>
+
+      {/* Hero Section */}
+      <section style={{ 
+        padding: '6rem 2rem', 
+        textAlign: 'center',
+        background: 'linear-gradient(135deg, #FDF8F3 0%, #F5EDE4 100%)'
+      }}>
+        <div style={{ maxWidth: '800px', margin: '0 auto' }}>
+          <p style={{ color: '#5B7FA3', marginBottom: '1rem', fontSize: '1.1rem' }}>
+            Oudercoaching & Gezinsbegeleiding
+          </p>
+          <h1 style={{ 
+            fontSize: '3rem', 
+            color: '#3D5A80', 
+            marginBottom: '1.5rem',
+            fontFamily: 'var(--font-playfair)',
+            lineHeight: 1.2
+          }}>
+            Bouwen aan Sterkere<br />Gezinsverbindingen
+          </h1>
+          <p style={{ color: '#5B7FA3', fontSize: '1.2rem', marginBottom: '2rem', lineHeight: 1.8 }}>
+            Transformeer je gezinsdynamiek door compassievolle begeleiding, 
+            evidence-based coaching en persoonlijke ondersteuning. 
+            Elk gezin heeft het potentieel om te bloeien.
+          </p>
+          <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center', flexWrap: 'wrap' }}>
+            <Link 
+              href="/contact" 
+              style={{ 
+                display: 'inline-block',
+                backgroundColor: '#3D5A80', 
+                color: 'white', 
+                padding: '1rem 2rem', 
+                borderRadius: '8px',
+                fontWeight: '500',
+                fontSize: '1.1rem'
+              }}
+            >
+              Gratis Kennismaking
+            </Link>
+            <Link 
+              href="/diensten" 
+              style={{ 
+                display: 'inline-block',
+                backgroundColor: 'transparent', 
+                color: '#3D5A80', 
+                padding: '1rem 2rem', 
+                borderRadius: '8px',
+                fontWeight: '500',
+                fontSize: '1.1rem',
+                border: '2px solid #3D5A80'
         
         <nav style={styles.nav}>
           {menuItems.map(item => (
@@ -258,6 +331,8 @@ export default function TherapeutDashboard() {
                 ...(activeSection === item.id ? styles.navItemActive : {})
               }}
             >
+              Bekijk Diensten
+            </Link>
               <span style={styles.navIcon}>{item.icon}</span>
               {item.label}
             </button>
@@ -377,7 +452,7 @@ function OverzichtSection({ patients }) {
         <div style={styles.statCard}>
           <span style={styles.statIcon}>👥</span>
           <span style={styles.statNumber}>{patients.length}</span>
-          <span style={styles.statLabel}>Mijn Patiënten</span>
+          <span style={styles.statLabel}>Patiënten</span>
         </div>
         <div style={styles.statCard}>
           <span style={styles.statIcon}>📅</span>
@@ -392,9 +467,9 @@ function OverzichtSection({ patients }) {
       </div>
 
       <div style={styles.card}>
-        <h3 style={styles.cardTitle}>Mijn patiënten</h3>
+        <h3 style={styles.cardTitle}>Recente patiënten</h3>
         {patients.length === 0 ? (
-          <p style={styles.emptyText}>Nog geen patiënten aan jou toegewezen.</p>
+          <p style={styles.emptyText}>Nog geen patiënten.</p>
         ) : (
           <ul style={styles.patientList}>
             {patients.slice(0, 5).map(p => (
@@ -414,7 +489,7 @@ function OverzichtSection({ patients }) {
 function PatientenSection({ patients, selectedPatient, setSelectedPatient }) {
   return (
     <div style={styles.section}>
-      <h1 style={styles.pageTitle}>👥 Mijn Patiënten</h1>
+      <h1 style={styles.pageTitle}>👥 Patiënten</h1>
       <p style={styles.pageDesc}>Beheer je patiënten en bekijk hun voortgang.</p>
 
       <div style={styles.patientGrid}>
@@ -436,9 +511,34 @@ function PatientenSection({ patients, selectedPatient, setSelectedPatient }) {
 
       {patients.length === 0 && (
         <div style={styles.emptyState}>
-          <p>Nog geen patiënten aan jou toegewezen.</p>
-          <p style={styles.emptyHint}>Patiënten worden gekoppeld via de admin.</p>
+          <p>Nog geen patiënten geregistreerd.</p>
         </div>
+      </section>
+
+      {/* Services Section */}
+      <section style={{ padding: '5rem 2rem', backgroundColor: 'white' }}>
+        <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
+          <h2 style={{ 
+            textAlign: 'center', 
+            fontSize: '2rem', 
+            color: '#3D5A80', 
+            marginBottom: '1rem',
+            fontFamily: 'var(--font-playfair)'
+          }}>
+            Hoe Ik Kan Helpen
+          </h2>
+          <p style={{ textAlign: 'center', color: '#5B7FA3', marginBottom: '3rem', maxWidth: '600px', margin: '0 auto 3rem' }}>
+            Samen werken we aan een harmonieuzer gezinsleven
+          </p>
+          
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '2rem' }}>
+            <div style={{ backgroundColor: '#FDF8F3', padding: '2rem', borderRadius: '16px' }}>
+              <div style={{ fontSize: '2.5rem', marginBottom: '1rem' }}>🌳</div>
+              <h3 style={{ color: '#3D5A80', marginBottom: '1rem', fontFamily: 'var(--font-playfair)', fontSize: '1.3rem' }}>Genogram</h3>
+              <p style={{ color: '#5B7FA3', lineHeight: 1.7 }}>
+                Breng de patronen in je familie over generaties in kaart. 
+                Ontdek overgeërfde dynamieken, krachten en groeimogelijkheden.
+              </p>
       )}
     </div>
   );
@@ -461,7 +561,7 @@ function NotitiesSection({ patients, selectedPatient, setSelectedPatient, sessio
         <>
           {/* Add new note form */}
           <div style={styles.card}>
-            <h3 style={styles.cardTitle}>Nieuwe notitie voor {selectedPatient.full_name}</h3>
+            <h3 style={styles.cardTitle}>Nieuwe notitie toevoegen</h3>
             
             <div style={styles.formGroup}>
               <label style={styles.label}>Samenvatting sessie:</label>
@@ -474,6 +574,13 @@ function NotitiesSection({ patients, selectedPatient, setSelectedPatient, sessio
               />
             </div>
 
+            <div style={{ backgroundColor: '#FDF8F3', padding: '2rem', borderRadius: '16px' }}>
+              <div style={{ fontSize: '2.5rem', marginBottom: '1rem' }}>🔄</div>
+              <h3 style={{ color: '#3D5A80', marginBottom: '1rem', fontFamily: 'var(--font-playfair)', fontSize: '1.3rem' }}>Systeemtherapie</h3>
+              <p style={{ color: '#5B7FA3', lineHeight: 1.7 }}>
+                Begrijp je gezin als een verbonden systeem. 
+                Werk aan relatiedynamiek en communicatiepatronen.
+              </p>
             <div style={styles.formGroup}>
               <label style={styles.label}>Belangrijke punten (één per regel):</label>
               <textarea
@@ -485,6 +592,13 @@ function NotitiesSection({ patients, selectedPatient, setSelectedPatient, sessio
               />
             </div>
 
+            <div style={{ backgroundColor: '#FDF8F3', padding: '2rem', borderRadius: '16px' }}>
+              <div style={{ fontSize: '2.5rem', marginBottom: '1rem' }}>💡</div>
+              <h3 style={{ color: '#3D5A80', marginBottom: '1rem', fontFamily: 'var(--font-playfair)', fontSize: '1.3rem' }}>Oudercoaching</h3>
+              <p style={{ color: '#5B7FA3', lineHeight: 1.7 }}>
+                Praktische strategieën voor dagelijkse opvoeduitdagingen. 
+                Bouw zelfvertrouwen op en versterk de band met je kind.
+              </p>
             <div style={styles.formRow}>
               <div style={styles.formGroup}>
                 <label style={styles.label}>Huiswerk:</label>
@@ -514,6 +628,18 @@ function NotitiesSection({ patients, selectedPatient, setSelectedPatient, sessio
             </button>
           </div>
 
+          <div style={{ textAlign: 'center', marginTop: '3rem' }}>
+            <Link 
+              href="/diensten"
+              style={{
+                display: 'inline-block',
+                color: '#3D5A80',
+                fontWeight: '500',
+                fontSize: '1.1rem'
+              }}
+            >
+              Alle diensten bekijken →
+            </Link>
           {/* Existing notes */}
           <div style={styles.card}>
             <h3 style={styles.cardTitle}>Eerdere notities</h3>
@@ -541,6 +667,65 @@ function NotitiesSection({ patients, selectedPatient, setSelectedPatient, sessio
               </div>
             )}
           </div>
+        </div>
+      </section>
+
+      {/* Testimonial Section */}
+      <section style={{ padding: '5rem 2rem', backgroundColor: '#F5EDE4' }}>
+        <div style={{ maxWidth: '800px', margin: '0 auto', textAlign: 'center' }}>
+          <div style={{ fontSize: '3rem', marginBottom: '1.5rem' }}>💬</div>
+          <blockquote style={{ fontSize: '1.3rem', color: '#3D5A80', fontStyle: 'italic', lineHeight: 1.8, marginBottom: '1.5rem' }}>
+            "Door de sessies heb ik geleerd om anders naar mijn kind te kijken. 
+            We begrijpen elkaar nu veel beter en de sfeer thuis is compleet veranderd."
+          </blockquote>
+          <p style={{ color: '#5B7FA3' }}>— Tevreden ouder</p>
+        </div>
+      </section>
+
+      {/* CTA Section */}
+      <section style={{ padding: '5rem 2rem', backgroundColor: '#3D5A80', textAlign: 'center' }}>
+        <h2 style={{ color: 'white', fontSize: '2rem', marginBottom: '1rem', fontFamily: 'var(--font-playfair)' }}>
+          Klaar om de Eerste Stap te Zetten?
+        </h2>
+        <p style={{ color: '#B8C9DB', marginBottom: '2rem', fontSize: '1.1rem', maxWidth: '600px', margin: '0 auto 2rem' }}>
+          Plan een gratis kennismakingsgesprek van 30 minuten. 
+          Vrijblijvend en zonder verplichtingen.
+        </p>
+        <Link 
+          href="/contact"
+          style={{
+            display: 'inline-block',
+            backgroundColor: 'white',
+            color: '#3D5A80',
+            padding: '1rem 2rem',
+            borderRadius: '8px',
+            fontWeight: '500',
+            fontSize: '1.1rem'
+          }}
+        >
+          Plan Gratis Gesprek
+        </Link>
+      </section>
+
+      {/* Footer */}
+      <footer style={{ padding: '3rem 2rem', backgroundColor: '#2E4A6F', color: '#B8C9DB' }}>
+        <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '2rem', marginBottom: '2rem' }}>
+            <div>
+              <p style={{ fontFamily: 'var(--font-playfair)', fontSize: '1.3rem', color: 'white', marginBottom: '0.5rem' }}>
+                Dynamic Parenting
+              </p>
+              <p style={{ fontSize: '0.9rem' }}>
+                Gezinnen koesteren, één verbinding per keer
+              </p>
+            </div>
+            <div>
+              <p style={{ color: 'white', fontWeight: '500', marginBottom: '0.5rem' }}>Pagina's</p>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                <Link href="/diensten" style={{ color: '#B8C9DB', fontSize: '0.9rem' }}>Diensten</Link>
+                <Link href="/over-mij" style={{ color: '#B8C9DB', fontSize: '0.9rem' }}>Over Mij</Link>
+                <Link href="/blog" style={{ color: '#B8C9DB', fontSize: '0.9rem' }}>Blog</Link>
+                <Link href="/contact" style={{ color: '#B8C9DB', fontSize: '0.9rem' }}>Contact</Link>
         </>
       )}
     </div>
@@ -571,7 +756,7 @@ function InzichtenSection({ patients, selectedPatient, setSelectedPatient, insig
         <>
           {/* Add new insight form */}
           <div style={styles.card}>
-            <h3 style={styles.cardTitle}>Nieuw inzicht voor {selectedPatient.full_name}</h3>
+            <h3 style={styles.cardTitle}>Nieuw inzicht toevoegen</h3>
             
             <div style={styles.formGroup}>
               <label style={styles.label}>Type:</label>
@@ -591,6 +776,11 @@ function InzichtenSection({ patients, selectedPatient, setSelectedPatient, insig
                 ))}
               </div>
             </div>
+            <div>
+              <p style={{ color: 'white', fontWeight: '500', marginBottom: '0.5rem' }}>Contact</p>
+              <p style={{ fontSize: '0.9rem' }}>
+                <a href="mailto:info@dynamicparenting.nl" style={{ color: '#B8C9DB' }}>info@dynamicparenting.nl</a>
+              </p>
 
             <div style={styles.formGroup}>
               <label style={styles.label}>Inhoud:</label>
@@ -607,6 +797,10 @@ function InzichtenSection({ patients, selectedPatient, setSelectedPatient, insig
               💡 Inzicht opslaan
             </button>
           </div>
+          <div style={{ borderTop: '1px solid #3D5A80', paddingTop: '1.5rem', textAlign: 'center' }}>
+            <p style={{ fontSize: '0.8rem', color: '#7A9BBF' }}>
+              © 2025 Dynamic Parenting | <Link href="/login" style={{ color: '#7A9BBF' }}>Cliënt login</Link>
+            </p>
 
           {/* Existing insights */}
           <div style={styles.card}>
@@ -663,7 +857,7 @@ function RapportenSection({ patients, selectedPatient, setSelectedPatient, repor
         <>
           {/* Upload form */}
           <div style={styles.card}>
-            <h3 style={styles.cardTitle}>Rapport uploaden voor {selectedPatient.full_name}</h3>
+            <h3 style={styles.cardTitle}>Rapport uploaden</h3>
             <div style={styles.uploadArea}>
               <input
                 type="file"
@@ -767,8 +961,10 @@ function BerichtenSection({ patients, selectedPatient, setSelectedPatient, messa
             </button>
           </div>
         </div>
+      </footer>
       )}
     </div>
+  )
   );
 }
 
@@ -797,19 +993,18 @@ const styles = {
     gap: '12px',
     borderBottom: '1px solid rgba(255,255,255,0.1)',
   },
-  logoIcon: { fontSize: '28px' },
-  logoText: { fontSize: '18px', fontWeight: '600', color: '#5cb85c' },
-  roleBadge: {
-    margin: '16px 20px',
-    padding: '10px 16px',
-    backgroundColor: 'rgba(92, 184, 92, 0.2)',
-    borderRadius: '8px',
-    fontSize: '14px',
+  logoIcon: {
+    fontSize: '28px',
+  },
+  logoText: {
+    fontSize: '18px',
     fontWeight: '600',
     color: '#5cb85c',
-    textAlign: 'center',
   },
-  nav: { flex: 1, padding: '8px 0' },
+  nav: {
+    flex: 1,
+    padding: '16px 0',
+  },
   navItem: {
     display: 'flex',
     alignItems: 'center',
@@ -829,7 +1024,9 @@ const styles = {
     color: 'white',
     borderLeft: '3px solid #5cb85c',
   },
-  navIcon: { fontSize: '18px' },
+  navIcon: {
+    fontSize: '18px',
+  },
   userSection: {
     padding: '20px',
     borderTop: '1px solid rgba(255,255,255,0.1)',
@@ -847,8 +1044,14 @@ const styles = {
     justifyContent: 'center',
     fontSize: '20px',
   },
-  userInfo: { display: 'flex', flexDirection: 'column' },
-  userName: { fontSize: '14px', fontWeight: '500' },
+  userInfo: {
+    display: 'flex',
+    flexDirection: 'column',
+  },
+  userName: {
+    fontSize: '14px',
+    fontWeight: '500',
+  },
   logoutBtn: {
     background: 'transparent',
     border: 'none',
@@ -865,14 +1068,19 @@ const styles = {
     marginLeft: '260px',
     padding: '32px',
   },
-  section: { maxWidth: '1000px' },
+  section: {
+    maxWidth: '1000px',
+  },
   pageTitle: {
     fontSize: '28px',
     fontWeight: '700',
     color: '#1e3a5f',
     marginBottom: '8px',
   },
-  pageDesc: { color: '#64748b', marginBottom: '32px' },
+  pageDesc: {
+    color: '#64748b',
+    marginBottom: '32px',
+  },
 
   // Stats
   statsGrid: {
@@ -890,9 +1098,19 @@ const styles = {
     alignItems: 'center',
     boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
   },
-  statIcon: { fontSize: '32px', marginBottom: '8px' },
-  statNumber: { fontSize: '36px', fontWeight: '700', color: '#1e3a5f' },
-  statLabel: { color: '#64748b', fontSize: '14px' },
+  statIcon: {
+    fontSize: '32px',
+    marginBottom: '8px',
+  },
+  statNumber: {
+    fontSize: '36px',
+    fontWeight: '700',
+    color: '#1e3a5f',
+  },
+  statLabel: {
+    color: '#64748b',
+    fontSize: '14px',
+  },
 
   // Cards
   card: {
@@ -910,7 +1128,9 @@ const styles = {
   },
 
   // Patient selector
-  patientSelector: { marginBottom: '24px' },
+  patientSelector: {
+    marginBottom: '24px',
+  },
   selectorLabel: {
     display: 'block',
     marginBottom: '8px',
@@ -948,17 +1168,25 @@ const styles = {
     borderColor: '#1e3a5f',
     boxShadow: '0 4px 12px rgba(30,58,95,0.2)',
   },
-  patientCardAvatar: { fontSize: '48px', marginBottom: '12px' },
+  patientCardAvatar: {
+    fontSize: '48px',
+    marginBottom: '12px',
+  },
   patientCardName: {
     fontSize: '16px',
     fontWeight: '600',
     color: '#1e3a5f',
     marginBottom: '4px',
   },
-  patientCardEmail: { fontSize: '13px', color: '#64748b' },
+  patientCardEmail: {
+    fontSize: '13px',
+    color: '#64748b',
+  },
 
   // Forms
-  formGroup: { marginBottom: '20px' },
+  formGroup: {
+    marginBottom: '20px',
+  },
   formRow: {
     display: 'grid',
     gridTemplateColumns: '1fr 1fr',
@@ -1000,7 +1228,11 @@ const styles = {
   },
 
   // Type buttons
-  typeButtons: { display: 'flex', gap: '10px', flexWrap: 'wrap' },
+  typeButtons: {
+    display: 'flex',
+    gap: '10px',
+    flexWrap: 'wrap',
+  },
   typeBtn: {
     padding: '10px 16px',
     border: 'none',
@@ -1012,17 +1244,34 @@ const styles = {
   },
 
   // Notes
-  notesList: { display: 'flex', flexDirection: 'column', gap: '16px' },
+  notesList: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '16px',
+  },
   noteCard: {
     backgroundColor: '#f8fafc',
     borderRadius: '8px',
     padding: '16px',
     borderLeft: '4px solid #1e3a5f',
   },
-  noteHeader: { marginBottom: '8px' },
-  noteDate: { fontSize: '13px', color: '#64748b' },
-  noteSummary: { color: '#334155', marginBottom: '12px', lineHeight: '1.6' },
-  notePoints: { marginLeft: '20px', color: '#475569', marginBottom: '12px' },
+  noteHeader: {
+    marginBottom: '8px',
+  },
+  noteDate: {
+    fontSize: '13px',
+    color: '#64748b',
+  },
+  noteSummary: {
+    color: '#334155',
+    marginBottom: '12px',
+    lineHeight: '1.6',
+  },
+  notePoints: {
+    marginLeft: '20px',
+    color: '#475569',
+    marginBottom: '12px',
+  },
   noteHomework: {
     fontSize: '14px',
     color: '#1e3a5f',
@@ -1040,7 +1289,11 @@ const styles = {
   },
 
   // Insights
-  insightsList: { display: 'flex', flexDirection: 'column', gap: '12px' },
+  insightsList: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '12px',
+  },
   insightCard: {
     backgroundColor: '#f8fafc',
     borderRadius: '8px',
@@ -1060,8 +1313,14 @@ const styles = {
     fontSize: '12px',
     fontWeight: '600',
   },
-  insightDate: { fontSize: '13px', color: '#64748b' },
-  insightContent: { color: '#334155', lineHeight: '1.6' },
+  insightDate: {
+    fontSize: '13px',
+    color: '#64748b',
+  },
+  insightContent: {
+    color: '#334155',
+    lineHeight: '1.6',
+  },
 
   // Reports
   uploadArea: {
@@ -1071,7 +1330,9 @@ const styles = {
     textAlign: 'center',
     backgroundColor: '#f8fafc',
   },
-  fileInput: { display: 'none' },
+  fileInput: {
+    display: 'none',
+  },
   uploadLabel: {
     display: 'block',
     fontSize: '16px',
@@ -1079,8 +1340,15 @@ const styles = {
     cursor: 'pointer',
     marginBottom: '8px',
   },
-  uploadHint: { fontSize: '13px', color: '#64748b' },
-  reportsList: { display: 'flex', flexDirection: 'column', gap: '12px' },
+  uploadHint: {
+    fontSize: '13px',
+    color: '#64748b',
+  },
+  reportsList: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '12px',
+  },
   reportCard: {
     display: 'flex',
     alignItems: 'center',
@@ -1089,10 +1357,22 @@ const styles = {
     backgroundColor: '#f8fafc',
     borderRadius: '8px',
   },
-  reportIcon: { fontSize: '24px' },
-  reportInfo: { flex: 1, display: 'flex', flexDirection: 'column' },
-  reportTitle: { fontWeight: '500', color: '#334155' },
-  reportDate: { fontSize: '13px', color: '#64748b' },
+  reportIcon: {
+    fontSize: '24px',
+  },
+  reportInfo: {
+    flex: 1,
+    display: 'flex',
+    flexDirection: 'column',
+  },
+  reportTitle: {
+    fontWeight: '500',
+    color: '#334155',
+  },
+  reportDate: {
+    fontSize: '13px',
+    color: '#64748b',
+  },
   newBadge: {
     backgroundColor: '#ef4444',
     color: 'white',
@@ -1117,8 +1397,12 @@ const styles = {
     alignItems: 'center',
     gap: '12px',
   },
-  chatAvatar: { fontSize: '24px' },
-  chatName: { fontWeight: '500' },
+  chatAvatar: {
+    fontSize: '24px',
+  },
+  chatName: {
+    fontWeight: '500',
+  },
   messagesContainer: {
     height: '400px',
     overflowY: 'auto',
@@ -1144,8 +1428,16 @@ const styles = {
     borderBottomLeftRadius: '4px',
     boxShadow: '0 1px 2px rgba(0,0,0,0.1)',
   },
-  messageContent: { margin: 0, lineHeight: '1.5' },
-  messageTime: { fontSize: '11px', opacity: 0.7, display: 'block', marginTop: '4px' },
+  messageContent: {
+    margin: 0,
+    lineHeight: '1.5',
+  },
+  messageTime: {
+    fontSize: '11px',
+    opacity: 0.7,
+    display: 'block',
+    marginTop: '4px',
+  },
   chatInputContainer: {
     display: 'flex',
     padding: '16px',
@@ -1176,13 +1468,15 @@ const styles = {
     padding: '40px',
     color: '#64748b',
   },
-  emptyHint: {
-    fontSize: '14px',
-    marginTop: '8px',
-    color: '#94a3b8',
+  emptyText: {
+    color: '#64748b',
+    fontStyle: 'italic',
   },
-  emptyText: { color: '#64748b', fontStyle: 'italic' },
-  patientList: { listStyle: 'none', padding: 0, margin: 0 },
+  patientList: {
+    listStyle: 'none',
+    padding: 0,
+    margin: 0,
+  },
   patientListItem: {
     display: 'flex',
     alignItems: 'center',
@@ -1190,7 +1484,9 @@ const styles = {
     padding: '12px 0',
     borderBottom: '1px solid #e2e8f0',
   },
-  patientAvatar: { fontSize: '20px' },
+  patientAvatar: {
+    fontSize: '20px',
+  },
 
   // Loading
   loadingContainer: {
@@ -1209,4 +1505,3 @@ const styles = {
     borderRadius: '50%',
     animation: 'spin 1s linear infinite',
   },
-};
