@@ -39,7 +39,10 @@ export default function RegistrerenPage() {
       if (authError) throw authError
 
       if (authData.user) {
-        await supabase.from('profiles').update({ full_name: formData.fullName, phone: formData.phone }).eq('id', authData.user.id)
+        const { error: profileError } = await supabase.from('profiles').update({ full_name: formData.fullName, phone: formData.phone }).eq('id', authData.user.id)
+        if (profileError) {
+          console.error('Profile update failed:', profileError)
+        }
       }
 
       setSuccess(true)

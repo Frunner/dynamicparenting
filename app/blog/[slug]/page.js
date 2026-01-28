@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
+import DOMPurify from 'isomorphic-dompurify'
 import { blogPosts } from '@/data/blogPosts'
 
 export async function generateStaticParams() {
@@ -74,7 +75,7 @@ export default function BlogPost({ params }) {
           <div style={{ backgroundColor: 'white', borderRadius: '16px', padding: '3rem', boxShadow: '0 2px 10px rgba(0,0,0,0.05)' }}>
             <div 
               style={{ color: '#444', lineHeight: 1.9, fontSize: '1.05rem' }}
-              dangerouslySetInnerHTML={{ __html: post.content.replace(/\n\n/g, '</p><p style="margin-bottom: 1.5rem;">').replace(/^/, '<p style="margin-bottom: 1.5rem;">').replace(/$/, '</p>').replace(/## (.*?)(?=\n|$)/g, '</p><h2 style="color: #3D5A80; margin-top: 2rem; margin-bottom: 1rem; font-family: var(--font-playfair); font-size: 1.5rem;">$1</h2><p style="margin-bottom: 1.5rem;">').replace(/### (.*?)(?=\n|$)/g, '</p><h3 style="color: #3D5A80; margin-top: 1.5rem; margin-bottom: 0.75rem; font-family: var(--font-playfair); font-size: 1.2rem;">$1</h3><p style="margin-bottom: 1.5rem;">') }}
+              dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(post.content.replace(/\n\n/g, '</p><p style="margin-bottom: 1.5rem;">').replace(/^/, '<p style="margin-bottom: 1.5rem;">').replace(/$/, '</p>').replace(/## (.*?)(?=\n|$)/g, '</p><h2 style="color: #3D5A80; margin-top: 2rem; margin-bottom: 1rem; font-family: var(--font-playfair); font-size: 1.5rem;">$1</h2><p style="margin-bottom: 1.5rem;">').replace(/### (.*?)(?=\n|$)/g, '</p><h3 style="color: #3D5A80; margin-top: 1.5rem; margin-bottom: 0.75rem; font-family: var(--font-playfair); font-size: 1.2rem;">$1</h3><p style="margin-bottom: 1.5rem;">')) }}
             />
           </div>
 
