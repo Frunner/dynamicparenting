@@ -12,7 +12,6 @@ export default function DienstenPage() {
       title: 'Genogram Sessie',
       description: 'Een visuele stamboom die verder gaat dan namen en data. We brengen emotionele patronen, relaties en terugkerende thema\'s door generaties heen in kaart.',
       duur: '90 minuten',
-      prijs: '€ 125',
       items: ['Voorbereiding met vragenlijst', 'Interactieve sessie', 'Visueel genogram', 'Nabespreking en inzichten']
     },
     {
@@ -20,7 +19,6 @@ export default function DienstenPage() {
       title: 'Systeemtherapie',
       description: 'Begrijp je gezin als een verbonden systeem waarin elk lid invloed heeft op het geheel. Samen werken we aan gezondere dynamieken.',
       duur: '60 minuten',
-      prijs: '€ 95',
       items: ['Analyse gezinssysteem', 'Communicatiepatronen', 'Rolverdeling', 'Praktische oefeningen']
     },
     {
@@ -28,7 +26,6 @@ export default function DienstenPage() {
       title: 'Oudercoaching',
       description: 'Praktische begeleiding bij dagelijkse opvoedvragen. Van grenzen stellen tot verbinding maken, van driftbuien tot tienergedrag.',
       duur: '60 minuten',
-      prijs: '€ 85',
       items: ['Concrete strategieën', 'Op maat advies', 'Oefeningen voor thuis', 'Tussentijdse ondersteuning']
     },
     {
@@ -36,7 +33,6 @@ export default function DienstenPage() {
       title: 'Co-ouderschap Begeleiding',
       description: 'Ondersteuning voor gescheiden ouders die samen het beste voor hun kinderen willen. Werk aan effectieve communicatie en afspraken.',
       duur: '75 minuten',
-      prijs: '€ 110',
       items: ['Communicatie verbeteren', 'Afspraken maken', 'Conflicthantering', 'Focus op het kind']
     },
   ]
