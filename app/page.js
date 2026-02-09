@@ -207,12 +207,11 @@ export default function Home() {
   <h4 style={{ color: '#FFFFFF', fontSize: '0.95rem', marginBottom: '0.75rem', fontFamily: 'var(--font-dm-sans)' }}>
     Contact
   </h4>
-  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', fontSize: '0.9rem', color: '#8A9199' }}>
-    <a href="mailto:info@dynamicparenting.nl" style={{ color: '#8A9199' }}>
-      info@dynamicparenting.nl
-    </a>
-    <p>Nieuwendammerkade 22D1<br />1022 AB Amsterdam</p>
-    <p>Reactietijd: binnen 24 uur</p>
+<p style={{ color: 'white', fontWeight: '500', marginBottom: '0.5rem' }}>Contact</p>
+              <p style={{ fontSize: '0.9rem' }}>
+                <a href="mailto:info@dynamicparenting.nl" style={{ color: '
+#B8C9DB' }}>info@dynamicparenting.nl</a>
+              </p>
   </div>
   </div>       
               </p>
