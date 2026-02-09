@@ -58,7 +58,7 @@ export default function ContactPage() {
                   <span style={{ fontSize: '1.5rem' }}>📍</span>
                   <div>
                     <p style={{ color: '#3D5A80', fontWeight: '500' }}>Locatie</p>
-                    <p style={{ color: '#5B7FA3' }}>Online & regio Noord-Brabant</p>
+                    <p style={{ color: '#5B7FA3' }}>Online & Amsterdam, Nieuwendammerkade 22D1</p>
                   </div>
                 </div>
 
