@@ -214,6 +214,7 @@ export default function Home() {
     <p>Nieuwendammerkade 22D1<br />1022 AB Amsterdam</p>
     <p>Reactietijd: binnen 24 uur</p>
   </div>
+  </div>       
               </p>
             </div>
           </div>
